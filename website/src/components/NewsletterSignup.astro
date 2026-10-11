@@ -2,14 +2,15 @@
 /**
  * The launch-updates newsletter sign-up. Renders nothing unless the build sets
  * PUBLIC_MAILCHIMP_FORM_ACTION (`newsletter.mjs`). The form posts straight to Mailchimp in a new
- * tab (opened without an opener), so the page loads no third-party script; consent is an unticked, required box naming who
- * sends the emails, the open and click tracking, and how to unsubscribe. The privacy page carries
- * the full notice.
+ * tab (opened without an opener), so the page loads no third-party script. Consent is an unticked,
+ * required box naming who sends the emails, the open and click tracking, and how to unsubscribe.
+ * The privacy page carries the full notice.
  */
 import {
   newsletterFormAction,
   newsletterTrapName,
 } from '../lib/newsletter.mjs';
+import BrandName from './BrandName.astro';
 import { sitePath } from '../lib/paths';
 
 const action = newsletterFormAction();
@@ -29,8 +30,8 @@ const trap = action ? newsletterTrapName(action) : null;
           <p class="section-kicker">Launch updates</p>
           <h2 id="newsletter-title">Hear when the Atlas launches.</h2>
           <p>
-            A few emails about the genomeOS launch and major releases. Nothing
-            else, and never shared or sold.
+            A few emails about the <BrandName /> launch and major releases.
+            Nothing else, and never shared or sold.
           </p>
         </div>
         <form
@@ -58,10 +59,10 @@ const trap = action ? newsletterTrapName(action) : null;
           <label class="newsletter__consent">
             <input type="checkbox" required data-newsletter-consent />
             <span>
-              Email me genomeOS launch updates. The genomeOS Foundation, being
-              registered in New York State, sends them through Mailchimp, which
-              records whether I open each email and which links I click. I can
-              unsubscribe from the link in every email.{' '}
+              Email me <BrandName /> launch updates. The <BrandName />{' '}
+              Foundation, being registered in New York State, sends them through
+              Mailchimp, which records whether I open each email and which links
+              I click. I can unsubscribe from the link in every email.{' '}
               <a href={sitePath('/privacy/#newsletter')}>
                 How my email is used
               </a>
