@@ -9,6 +9,11 @@
  * regions does not count, and neither does a choice the browser could not store. View and
  * inspector events follow the page's consent as before.
  *
+ * Coverage cost: outside the opt-in regions the switch already starts on, so few visitors there
+ * ever store an explicit `granted`. Dataset-open counts therefore come almost entirely from
+ * opt-in-region visitors who choose Accept, and undercount the Atlas's real use. Read them as a
+ * lower bound from that population, not as total dataset demand.
+ *
  * Only a build with PUBLIC_GA_MEASUREMENT_ID loads gtag (`ga.mjs`). In every other build the
  * check below is a constant, so the bundler drops the sending code; on a page without gtag the
  * call does nothing, and while analytics is denied the head's gtag drops it. It never throws.
