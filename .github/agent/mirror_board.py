@@ -126,8 +126,7 @@ def write_issue(directory: pathlib.Path, issue: dict, status: str) -> None:
         f"# #{issue['number']}: {issue['title']}",
         "",
         f"- url: {issue['url']}",
-        f"- state: {issue['state']}"
-        + (f" ({issue['stateReason']})" if issue["stateReason"] else ""),
+        f"- state: {issue['state']}" + (f" ({issue['stateReason']})" if issue["stateReason"] else ""),
         f"- board status: {status or 'not on board'}",
         f"- labels: {', '.join(names(issue['labels'])) or 'none'}",
         f"- assignees: {', '.join(names(issue['assignees'], 'login')) or 'none'}",
@@ -140,8 +139,7 @@ def write_issue(directory: pathlib.Path, issue: dict, status: str) -> None:
         lines.append(
             "- linked PRs: "
             + ", ".join(
-                f"#{pr['number']} {pr['state']} "
-                f"({login(pr['headRepositoryOwner'])}:{pr['headRefName']})"
+                f"#{pr['number']} {pr['state']} ({login(pr['headRepositoryOwner'])}:{pr['headRefName']})"
                 for pr in linked
             )
         )
@@ -165,8 +163,7 @@ def write_pr(directory: pathlib.Path, pr: dict) -> None:
         "",
         f"- url: {pr['url']}",
         f"- state: {state}{' (draft)' if pr['isDraft'] else ''}",
-        f"- head: {login(pr['headRepositoryOwner'])}:{pr['headRefName']}"
-        f" -> base {pr['baseRefName']}",
+        f"- head: {login(pr['headRepositoryOwner'])}:{pr['headRefName']} -> base {pr['baseRefName']}",
         f"- labels: {', '.join(names(pr['labels'])) or 'none'}",
         f"- author: {login(pr['author'])}; created {pr['createdAt']}; "
         f"closed {pr['closedAt'] or 'no'}; merged {pr['mergedAt'] or 'no'}",
@@ -178,8 +175,16 @@ def write_pr(directory: pathlib.Path, pr: dict) -> None:
     (directory / f"{pr['number']}.md").write_text("\n".join(lines) + "\n")
 
 
-def mirror(fetch_issues, fetch_prs, owner: str, name: str, board_owner: str,
-           board_number: int, out: pathlib.Path, now: dt.datetime) -> dict:
+def mirror(
+    fetch_issues,
+    fetch_prs,
+    owner: str,
+    name: str,
+    board_owner: str,
+    board_number: int,
+    out: pathlib.Path,
+    now: dt.datetime,
+) -> dict:
     issues_dir, prs_dir = out / "issues", out / "prs"
     issues_dir.mkdir(parents=True)
     prs_dir.mkdir(parents=True)
@@ -189,32 +194,52 @@ def mirror(fetch_issues, fetch_prs, owner: str, name: str, board_owner: str,
         status = board_status(issue, board_owner, board_number)
         write_issue(issues_dir, issue, status)
         labels = names(issue["labels"])
-        index.append([str(issue["number"]), issue["state"], issue["stateReason"] or "",
-                      status, ",".join(labels), one_line(issue["title"])])
+        index.append(
+            [
+                str(issue["number"]),
+                issue["state"],
+                issue["stateReason"] or "",
+                status,
+                ",".join(labels),
+                one_line(issue["title"]),
+            ]
+        )
         if issue["state"] == "OPEN" and status == "Ready":
-            ready.append({
-                "number": issue["number"],
-                "title": issue["title"],
-                "url": issue["url"],
-                "labels": labels,
-                "assignees": names(issue["assignees"], "login"),
-                "milestone": (issue["milestone"] or {}).get("title"),
-                "updated_at": issue["updatedAt"],
-                "linked_prs": [
-                    {"number": pr["number"], "state": pr["state"],
-                     "head": f"{login(pr['headRepositoryOwner'])}:{pr['headRefName']}"}
-                    for pr in issue["closedByPullRequestsReferences"]["nodes"]
-                ],
-            })
+            ready.append(
+                {
+                    "number": issue["number"],
+                    "title": issue["title"],
+                    "url": issue["url"],
+                    "labels": labels,
+                    "assignees": names(issue["assignees"], "login"),
+                    "milestone": (issue["milestone"] or {}).get("title"),
+                    "updated_at": issue["updatedAt"],
+                    "linked_prs": [
+                        {
+                            "number": pr["number"],
+                            "state": pr["state"],
+                            "head": f"{login(pr['headRepositoryOwner'])}:{pr['headRefName']}",
+                        }
+                        for pr in issue["closedByPullRequestsReferences"]["nodes"]
+                    ],
+                }
+            )
 
     pr_index, main = [], None
     for repository, pr in paginate(fetch_prs, owner, name, "pullRequests"):
         main = repository["defaultBranchRef"]
         write_pr(prs_dir, pr)
         state = "MERGED" if pr["merged"] else pr["state"]
-        pr_index.append([str(pr["number"]), state, "draft" if pr["isDraft"] else "",
-                         f"{login(pr['headRepositoryOwner'])}:{pr['headRefName']}",
-                         pr["baseRefName"], one_line(pr["title"])])
+        pr_index.append(
+            [
+                str(pr["number"]),
+                state,
+                "draft" if pr["isDraft"] else "",
+                f"{login(pr['headRepositoryOwner'])}:{pr['headRefName']}",
+                pr["baseRefName"],
+                one_line(pr["title"]),
+            ]
+        )
 
     header = "number\tstate\tstate_reason\tboard_status\tlabels\ttitle\n"
     (issues_dir / "index.tsv").write_text(header + "".join("\t".join(r) + "\n" for r in index))
@@ -247,8 +272,12 @@ def main() -> None:
     meta = mirror(
         lambda v: gql(token, ISSUES_QUERY, v),
         lambda v: gql(token, PRS_QUERY, v),
-        owner, name, os.environ["BOARD_OWNER"], int(os.environ["BOARD_NUMBER"]),
-        pathlib.Path(os.environ["OUT_DIR"]), dt.datetime.now(dt.timezone.utc),
+        owner,
+        name,
+        os.environ["BOARD_OWNER"],
+        int(os.environ["BOARD_NUMBER"]),
+        pathlib.Path(os.environ["OUT_DIR"]),
+        dt.datetime.now(dt.UTC),
     )
     print(json.dumps(meta))
 

@@ -23,8 +23,6 @@ jobs:
     if: github.repository_owner != 'genomeOS'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      OUT_DIR: ${{ runner.temp }}/agent-state
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,14 +39,14 @@ jobs:
             echo "::error::Add a BOARD_TOKEN secret: a classic token with the read:project scope."
             exit 1
           fi
-          python3 .github/agent/mirror_board.py
+          OUT_DIR="$RUNNER_TEMP/agent-state" python3 .github/agent/mirror_board.py
 
       - name: Replace the agent-state branch
         env:
           PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd "$OUT_DIR"
+          cd "$RUNNER_TEMP/agent-state"
           git init -q -b agent-state
           git add -A
           git -c user.name="github-actions[bot]" \
