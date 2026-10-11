@@ -1,0 +1,58 @@
+# Mirror the genomeOS board and issue history onto this fork's `agent-state` branch.
+#
+# The cloud drafting agent cannot reach GitHub's GraphQL or Projects APIs, so this job reads the
+# board (https://github.com/orgs/genomeOS/projects/1) and every upstream issue and PR with a
+# classic token, then force-pushes one commit of plain files to `agent-state` for the agent to
+# read with git. Fork-only: it lives on the fork's main and never goes upstream.
+name: mirror-board
+
+on:
+  schedule:
+    # 05:20, 11:20, 17:20 and 23:20 UTC; 11:20 lands before the 07:57 Eastern drafting run.
+    - cron: "20 5,11,17,23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-board
+
+jobs:
+  mirror:
+    if: github.repository_owner != 'genomeOS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OUT_DIR: ${{ runner.temp }}/agent-state
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/agent
+
+      - name: Export the board, issues and PRs
+        env:
+          BOARD_TOKEN: ${{ secrets.BOARD_TOKEN }}
+          UPSTREAM: genomeOS/genomeOS
+          BOARD_OWNER: genomeOS
+          BOARD_NUMBER: "1"
+        run: |
+          if [ -z "$BOARD_TOKEN" ]; then
+            echo "::error::Add a BOARD_TOKEN secret: a classic token with the read:project scope."
+            exit 1
+          fi
+          python3 .github/agent/mirror_board.py
+
+      - name: Replace the agent-state branch
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$OUT_DIR"
+          git init -q -b agent-state
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898099+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "mirror: board, issues and PRs at $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              agent-state
