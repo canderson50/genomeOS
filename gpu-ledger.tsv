@@ -1,2 +1,3 @@
 date	pod	gpu	usd_per_hr	minutes	usd	sha	exit	note
 2026-10-11T15:40Z	z29jk64zklly2d	NVIDIA A40	0.59	15.2	0.1495	-	-	selftest-passed (endpoint reached, removed itself)
+2026-10-11T16:20Z	02xcywzmu3s3pr	NVIDIA A40	0.59	4.3	0.0426	6132f8722e54d000a0bfdc83fc663dfb2fb599fc	none	hash mismatch on status.json
