@@ -29,13 +29,16 @@ describe('Atlas e2e build wiring', () => {
       if (name !== 'build:e2e')
         expect(script, name).not.toContain('PUBLIC_ATLAS_REQUEST_STALL_MS');
     // #422: only the browser tests build with a (placeholder) Measurement ID; the fixture stubs
-    // gtag.js, and the capture scripts reuse build:e2e without analytics.
+    // gtag.js, and the capture scripts reuse build:e2e without analytics. The same holds for the
+    // placeholder newsletter form action, which the browser tests never submit to.
     expect(npm['test:e2e']).toBe(
-      'PUBLIC_GA_MEASUREMENT_ID=G-TEST123 npm run build:e2e && playwright test',
+      "PUBLIC_GA_MEASUREMENT_ID=G-TEST123 PUBLIC_MAILCHIMP_FORM_ACTION='https://example.us1.list-manage.com/subscribe/post?u=0123456789abcdef&id=abcdef1234' npm run build:e2e && playwright test",
     );
     for (const [name, script] of Object.entries(npm))
-      if (name !== 'test:e2e')
+      if (name !== 'test:e2e') {
         expect(script, name).not.toContain('PUBLIC_GA_MEASUREMENT_ID');
+        expect(script, name).not.toContain('PUBLIC_MAILCHIMP_FORM_ACTION');
+      }
     expect(npm['capture:atlas']).toBe(
       'npm run build:e2e && node scripts/capture-atlas.mjs',
     );

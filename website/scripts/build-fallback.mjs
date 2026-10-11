@@ -11,6 +11,8 @@ execFileSync(npm, ['run', 'build'], {
     ASTRO_TELEMETRY_DISABLED: '1',
     // #422: the /genomeOS/ fallback never reports to Google Analytics.
     PUBLIC_GA_MEASUREMENT_ID: '',
+    // The fallback never shows the newsletter sign-up form.
+    PUBLIC_MAILCHIMP_FORM_ACTION: '',
   },
   stdio: 'inherit',
 });

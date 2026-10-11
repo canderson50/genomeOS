@@ -4,7 +4,8 @@
  * sets and when (opt-in in the EEA, the UK, Switzerland, Quebec and Turkey; opt-out elsewhere,
  * with Global Privacy Control honoured), how long they and the data last, and how to change the
  * choice. Every build publishes it; a build without analytics (the /genomeOS/ fallback, local dev)
- * says so first.
+ * says so first. It also gives the notice for the launch-updates newsletter (`newsletter.mjs`):
+ * who holds the addresses, what Mailchimp records, how long it is kept, and how to leave.
  */
 import BrandName from '../components/BrandName.astro';
 import CookieSettings from '../components/CookieSettings.astro';
@@ -17,12 +18,12 @@ const analytics = gaMeasurementId() !== null;
 
 <SiteLayout
   title="Privacy"
-  description="How genome-os.org uses Google Analytics, which cookies it sets and when, and how to change your choice."
+  description="How genome-os.org uses Google Analytics and the launch-updates newsletter, which cookies it sets and when, and how to change your choice."
 >
   <PageIntro
     note="Privacy"
     title="What we measure, and what we don't."
-    lede="genomeOS uses Google Analytics to see which pages and Atlas datasets people use, so we can improve them. There are no ads, and we never send what you look at on the map."
+    lede="genomeOS uses Google Analytics to see which pages and Atlas datasets people use, so we can improve them. If you sign up for launch updates, we keep your email address to send them. There are no ads, and we never send what you look at on the map."
   />
 
   <section class="contribution-detail" aria-label="How analytics works">
@@ -124,7 +125,11 @@ const analytics = gaMeasurementId() !== null;
             Google signals are off, so visits are not linked to Google accounts
             or across devices.
           </li>
-          <li>No names, accounts or other personal details.</li>
+          <li>
+            No names, accounts or other personal details. The newsletter, below,
+            is the only place the site asks for anything about you, and it asks
+            only for an email address.
+          </li>
         </ul>
         <p>
           Map imagery and the Atlas’s optional data lookups load straight from
@@ -164,6 +169,54 @@ const analytics = gaMeasurementId() !== null;
             >how Google uses information from sites that use its services</a
           > apply to it.
         </p>
+      </article>
+      <article id="newsletter">
+        <h2>Launch-updates newsletter</h2>
+        <p>
+          The sign-up form asks for your email address and nothing else. The
+          <BrandName /> Foundation, which is being registered as an organisation in
+          New York State, holds the list and decides how it is used. It sends a few
+          emails about the <BrandName /> launch and major releases, and nothing else.
+          The list is never shared or sold.
+        </p>
+        <ul>
+          <li>
+            <strong>Your consent.</strong> We email you only because you ticked the
+            box and then confirmed through the link we sent. That consent is our only
+            reason for holding your address, and you can withdraw it at any time.
+          </li>
+          <li>
+            <strong>Mailchimp.</strong> The list is kept with Mailchimp, run by Intuit,
+            which stores it in the United States and sends the emails for us. The
+            form posts straight to Mailchimp: the site loads no Mailchimp code and
+            sets no cookie for it. Mailchimp records when you signed up and confirmed,
+            and the IP address you used each time, as proof of your consent. Its <a
+              href="https://www.intuit.com/privacy/statement/"
+              target="_blank"
+              rel="noopener noreferrer">privacy statement</a
+            > applies to that service.
+          </li>
+          <li>
+            <strong>Opens and clicks.</strong> Each email contains a small image and
+            tracked links, so Mailchimp records whether and when you open it, which
+            links you click, and the approximate location and email app that this
+            reveals. We use this only to see whether the emails are useful. Blocking
+            images in your email app stops the open tracking.
+          </li>
+          <li>
+            <strong>How long.</strong> We keep your address until you unsubscribe
+            or ask us to delete it. After you unsubscribe, Mailchimp keeps it marked
+            as unsubscribed so that you are not emailed again; ask us and we will
+            delete it entirely.
+          </li>
+          <li>
+            <strong>Your rights.</strong> You can unsubscribe from the link in every
+            email. You can also ask to see, correct or delete what we hold by writing
+            to <a href="mailto:info@genome-os.org">info@genome-os.org</a>, and
+            you can complain to the data protection authority where you live.
+          </li>
+        </ul>
+        <p>The newsletter is not meant for anyone under 16.</p>
       </article>
     </div>
   </section>

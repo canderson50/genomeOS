@@ -148,6 +148,8 @@ jobs:
           GOOGLE_MAPS_TOKEN: ${{ secrets.GOOGLE_MAPS_TOKEN }}
           # Google Analytics 4 (#422): only this build reports. Unset, the site loads no analytics.
           PUBLIC_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+          # Launch-updates newsletter: only this build shows the Mailchimp sign-up form. Unset, no form.
+          PUBLIC_MAILCHIMP_FORM_ACTION: ${{ vars.MAILCHIMP_FORM_ACTION }}
       - name: Refuse broken production links
         run: npm run check:links -- dist /
         working-directory: website

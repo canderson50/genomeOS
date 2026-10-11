@@ -1,0 +1,181 @@
+---
+/**
+ * The launch-updates newsletter sign-up. Renders nothing unless the build sets
+ * PUBLIC_MAILCHIMP_FORM_ACTION (`newsletter.mjs`). The form posts straight to Mailchimp in a new
+ * tab (opened without an opener), so the page loads no third-party script. Consent is an unticked,
+ * required box naming who sends the emails, the open and click tracking, and how to unsubscribe.
+ * The privacy page carries the full notice.
+ */
+import {
+  newsletterFormAction,
+  newsletterTrapName,
+} from '../lib/newsletter.mjs';
+import BrandName from './BrandName.astro';
+import { sitePath } from '../lib/paths';
+
+const action = newsletterFormAction();
+const trap = action ? newsletterTrapName(action) : null;
+---
+
+{
+  action && trap && (
+    <section
+      class="newsletter"
+      id="newsletter"
+      aria-labelledby="newsletter-title"
+      data-newsletter
+    >
+      <div class="section-shell newsletter__inner">
+        <div class="newsletter__copy">
+          <p class="section-kicker">Launch updates</p>
+          <h2 id="newsletter-title">Hear when the Atlas launches.</h2>
+          <p>
+            A few emails about the <BrandName /> launch and major releases.
+            Nothing else, and never shared or sold.
+          </p>
+        </div>
+        <form
+          class="newsletter__form"
+          action={action}
+          method="post"
+          target="_blank"
+        >
+          <label class="newsletter__label" for="newsletter-email">
+            Email address
+          </label>
+          <div class="newsletter__row">
+            <input
+              id="newsletter-email"
+              class="newsletter__email"
+              type="email"
+              name="EMAIL"
+              autocomplete="email"
+              required
+            />
+            <button class="newsletter__submit" type="submit">
+              Sign up
+            </button>
+          </div>
+          <label class="newsletter__consent">
+            <input type="checkbox" required data-newsletter-consent />
+            <span>
+              Email me <BrandName /> launch updates. The <BrandName />{' '}
+              Foundation, being registered in New York State, sends them through
+              Mailchimp, which records whether I open each email and which links
+              I click. I can unsubscribe from the link in every email.{' '}
+              <a href={sitePath('/privacy/#newsletter')}>
+                How my email is used
+              </a>
+              .
+            </span>
+          </label>
+          <p class="newsletter__note">
+            We'll email you a link to confirm. You're only added once you click
+            it.
+          </p>
+          <div class="newsletter__trap" aria-hidden="true">
+            <input type="text" name={trap} tabindex="-1" value="" />
+          </div>
+        </form>
+      </div>
+    </section>
+  )
+}
+
+<style>
+  .newsletter {
+    padding-block: clamp(4rem, 9vw, 7rem);
+    border-top: 1px solid rgb(112 230 255 / 14%);
+  }
+
+  .newsletter__inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem 4rem;
+    align-items: start;
+  }
+
+  .newsletter__copy p:not(.section-kicker) {
+    max-width: 32rem;
+    margin: 0;
+    color: var(--color-muted);
+  }
+
+  .newsletter__form {
+    display: grid;
+    gap: 0.9rem;
+  }
+
+  .newsletter__label {
+    font-weight: 650;
+  }
+
+  .newsletter__row {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .newsletter__email {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid rgb(112 230 255 / 40%);
+    border-radius: 0.5rem;
+    background: rgb(2 7 18 / 60%);
+    color: var(--color-starlight);
+    font: inherit;
+  }
+
+  .newsletter__submit {
+    min-height: 44px;
+    padding: 0.45rem 1.2rem;
+    border: 1px solid rgb(112 230 255 / 55%);
+    border-radius: 0.5rem;
+    background: rgb(112 230 255 / 14%);
+    color: var(--color-starlight);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .newsletter__submit:hover {
+    background: rgb(112 230 255 / 24%);
+  }
+
+  .newsletter__consent {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.6rem;
+    align-items: start;
+    color: var(--color-muted);
+    font-size: 0.92rem;
+  }
+
+  .newsletter__consent input {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 0.2rem;
+  }
+
+  .newsletter__note {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 0.88rem;
+  }
+
+  .newsletter__trap {
+    position: absolute;
+    left: -5000px;
+  }
+
+  @media (max-width: 46rem) {
+    .newsletter__inner {
+      grid-template-columns: 1fr;
+    }
+
+    .newsletter__row {
+      flex-direction: column;
+    }
+  }
+</style>
