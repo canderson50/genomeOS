@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -55,6 +56,22 @@ function withKind(
   kind: GalleryOption['kind'],
 ): GalleryOption {
   return { ...option, kind };
+}
+
+/** Sets each "genomeOS" in a catalog label in the wordmark type, as the site does everywhere. */
+export function withWordmark(text: string): ReactNode {
+  const parts = text.split('genomeOS');
+  if (parts.length === 1) return text;
+  return parts.flatMap((part, index) =>
+    index === 0
+      ? [part]
+      : [
+          <span className="brand-name" key={index}>
+            genomeOS
+          </span>,
+          part,
+        ],
+  );
 }
 
 function groupedBasemaps() {
@@ -198,7 +215,7 @@ export function EarthStylePicker({
           <img src={thumbnail(option)} alt="" />
           {!available && <span aria-hidden="true">◆</span>}
         </span>
-        <span>{option.label}</span>
+        <span>{withWordmark(option.label)}</span>
       </button>
     );
   };
@@ -236,8 +253,8 @@ export function EarthStylePicker({
           <img src={thumbnail(selectedTerrain)} alt="" />
         </span>
         <span>
-          <strong>{selectedBasemap.label}</strong>
-          <small>{selectedTerrain.label}</small>
+          <strong>{withWordmark(selectedBasemap.label)}</strong>
+          <small>{withWordmark(selectedTerrain.label)}</small>
         </span>
         <span className="atlas-earth-style__chevron" aria-hidden="true">
           {open ? '−' : '+'}
@@ -271,7 +288,7 @@ export function EarthStylePicker({
 
             <div className="atlas-earth-picker__detail" role="tooltip">
               <div>
-                <strong>{detail.label}</strong>
+                <strong>{withWordmark(detail.label)}</strong>
                 <span>{detail.provider}</span>
               </div>
               <p>{detail.description}</p>
@@ -285,7 +302,7 @@ export function EarthStylePicker({
               <div className="atlas-earth-picker__groups">
                 {groupedBasemaps().map(({ category, options }) => (
                   <div className="atlas-earth-picker__group" key={category}>
-                    <h4>{category}</h4>
+                    <h4>{withWordmark(category)}</h4>
                     <div
                       aria-label={`${category} basemaps`}
                       className="atlas-earth-picker__grid"
