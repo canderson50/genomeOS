@@ -17,6 +17,8 @@ export function setup(): void {
       // #422: unit tests read a build without analytics (tests/analytics-build.test.ts), whatever
       // the shell exports.
       PUBLIC_GA_MEASUREMENT_ID: '',
+      // Unit tests read a build without the newsletter form (tests/newsletter.test.ts).
+      PUBLIC_MAILCHIMP_FORM_ACTION: '',
     },
     stdio: 'inherit',
   });

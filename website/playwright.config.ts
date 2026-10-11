@@ -13,7 +13,12 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['site.spec.ts', 'atlas-mobile.spec.ts', 'analytics.spec.ts'],
+  testMatch: [
+    'site.spec.ts',
+    'atlas-mobile.spec.ts',
+    'analytics.spec.ts',
+    'newsletter.spec.ts',
+  ],
   fullyParallel: false,
   workers: playwrightWorkers(),
   forbidOnly: Boolean(process.env.CI),
