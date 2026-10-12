@@ -106,10 +106,12 @@ work() {
   fi
   cp -f /work/*.xml /results/ 2>/dev/null
   cd /results || { phase failed; return; }
+  # status.json is live progress, rewritten to "done" after this manifest, so it is never hashed.
   python3 - "$rc" "$SHA" <<'PY'
 import hashlib, json, pathlib, sys
+live = {"done.json", "status.json"}
 files = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-         for p in sorted(pathlib.Path(".").iterdir()) if p.is_file() and p.name != "done.json"}
+         for p in sorted(pathlib.Path(".").iterdir()) if p.is_file() and p.name not in live}
 json.dump({"exit": int(sys.argv[1]), "sha": sys.argv[2], "files": files}, open("done.json", "w"))
 PY
   phase "done"
