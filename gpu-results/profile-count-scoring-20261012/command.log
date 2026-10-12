@@ -1,0 +1,13 @@
+START small 00:52:39
+END small rc=0 01:00:34
+SUMMARY draws=200 obs=100 an=200 conc=20.0 cpu_first=150.88s cpu_warm=148.76s gpu_cold=15.67s gpu_warm=1.85s speedup_warm=80.4x parity=True
+START an2000 01:00:34
+END an2000 rc=0 01:14:33
+SUMMARY draws=200 obs=100 an=2000 conc=20.0 cpu_first=272.13s cpu_warm=272.74s gpu_cold=6.26s gpu_warm=5.84s speedup_warm=46.7x parity=True
+START obs300 01:14:33
+END obs300 rc=124 01:39:33
+START highconc 01:39:33
+END highconc rc=0 01:47:20
+SUMMARY draws=200 obs=100 an=200 conc=5000.0 cpu_first=153.80s cpu_warm=154.03s gpu_cold=2.50s gpu_warm=1.87s speedup_warm=82.6x parity=True
+START realshape 01:47:20
+END realshape rc=124 02:12:20
