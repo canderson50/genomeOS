@@ -3,3 +3,6 @@
 2026-10-11 drafted Atlas picker wordmark fix PR canderson50/genomeOS#5 (at canderson50's request; separate from #4, whose shard-1 failure it fixes).
 2026-10-12 fixed runpod_job.py status.json manifest race on fork main (370a952, at canderson50's request); verified on A40 pod t6d6pmoloe5sc1: results-verified, 13 passed, $0.02.
 2026-10-12 profiled count scoring CPU vs CuPy on A40 pod tdrqbh8uf6vj1c (synthetic, at f3357ce): warm speed-up 47-83x at 3 sizes; obs300 and realshape hit 25-min caps on CPU; $0.80.
+2026-10-12 synced: fork main already at upstream f3357ce (no merge needed); fork main 370a952.
+2026-10-12 closed: draft canderson50/genomeOS#3 (issue #276); submitted upstream as genomeOS/genomeOS#435.
+2026-10-12 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-12T02:29Z, 0 Ready of 241 issues).
