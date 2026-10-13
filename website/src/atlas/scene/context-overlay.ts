@@ -261,8 +261,8 @@ export class ContextOverlay {
       this.#applyElevation(true);
       return 'ready';
     } catch (error) {
-      // Unmount and "Retry globe" destroy the scene (and stop the worker), and the viewer's
-      // credits with it: not a load failure.
+      // Unmount and "Retry globe" destroy the scene (and stop the worker), and the
+      // CesiumWidget's credits with it: not a load failure.
       if (!this.#isDestroyed()) {
         console.warn(
           'Geographic reference overlay could not be loaded.',
@@ -275,7 +275,7 @@ export class ContextOverlay {
     }
   }
 
-  /** Viewer.destroy() destroys the scene's primitives, this collection among them. */
+  /** CesiumWidget.destroy() destroys the scene's primitives, this collection among them. */
   #isDestroyed(): boolean {
     return this.collection.isDestroyed();
   }
