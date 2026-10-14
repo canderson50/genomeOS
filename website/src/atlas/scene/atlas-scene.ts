@@ -1,7 +1,13 @@
-/** Cesium lifecycle and scientific-layer orchestration for Atlas design §11 (spec 2026-10-07 §B.6). */
+/** Cesium lifecycle and scientific-layer orchestration for Atlas design §11 (spec 2026-10-07 §B.6).
+ *
+ * After the surface is visible, the scene runs the post-reveal load order (§B.6.9, `load-order.ts`):
+ * the Natural Earth borders' download, then each displayed artifact's detail tier (`queueDetail`),
+ * then the starfield, which is also held until `ready`. A failed artifact request starts the same
+ * order. */
 
-import { SceneMode, Viewer } from 'cesium';
+import { SceneMode, type CesiumWidget } from 'cesium';
 
+import { createLoadOrder, type LoadOrder, type LoadTask } from '../load-order';
 import type {
   BasemapId,
   CameraState,
@@ -20,6 +26,7 @@ import {
   type ContextWarningUpdate,
 } from './context-controller';
 import { ContextOverlay } from './context-overlay';
+import { createGlobeWidget, type GlobeWidget } from './globe-widget';
 import { HighlightLayer } from './highlight-layer';
 import { bindAtlasPicking } from './picking';
 import { RenderLoop } from './render-loop';
@@ -76,7 +83,8 @@ function isAbortError(error: unknown): boolean {
 }
 
 class CesiumAtlasScene implements AtlasSceneController {
-  readonly #viewer: Viewer;
+  readonly #globe: GlobeWidget;
+  readonly #widget: CesiumWidget;
   readonly #pickListeners = new Set<(pick: AtlasPick | null) => void>();
   readonly #hoverListeners = new Set<(hover: AtlasHover | null) => void>();
   readonly #cameraListeners = new Set<(camera: CameraState) => void>();
@@ -98,6 +106,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   readonly #marks: MarkTracker;
   readonly #layers: ScientificLayers;
   readonly #revealSky: () => void;
+  readonly #loadOrder: LoadOrder;
   readonly #naturalEarthUrl: string;
   #metric: Metric = 'post_mean';
   #palette: PaletteId = 'rainbow';
@@ -115,61 +124,44 @@ class CesiumAtlasScene implements AtlasSceneController {
   #elevationSequence = 0;
   #mode: ExplorerSceneMode = 'globe';
   #destroyed = false;
-  #contextStarted = false;
   #contextStatus: ContextStatus = 'loading';
   #reducedMotion: boolean;
 
   constructor(container: HTMLElement, options: AtlasSceneOptions) {
     this.#reducedMotion = options.reducedMotion ?? false;
-    this.#viewer = new Viewer(container, {
-      animation: false,
-      baseLayer: false,
-      baseLayerPicker: false,
-      fullscreenButton: false,
-      geocoder: false,
-      homeButton: false,
-      infoBox: false,
-      navigationHelpButton: false,
-      maximumRenderTimeChange: Number.POSITIVE_INFINITY,
-      requestRenderMode: true,
-      scene3DOnly: false,
-      sceneModePicker: false,
-      selectionIndicator: false,
-      // Cesium's own panel is a dead end, and its loop stops silently on errors outside
-      // Scene.render; the Atlas loop sends every render error to the explorer's retry instead.
-      showRenderLoopErrors: false,
-      timeline: false,
-      useDefaultRenderLoop: false,
-      vrButton: false,
-    });
+    this.#globe = createGlobeWidget(container);
+    this.#widget = this.#globe.widget;
     this.#renderLoop = new RenderLoop(() => {
-      this.#viewer.resize();
-      this.#viewer.render();
+      this.#widget.resize();
+      this.#widget.render();
     });
-    this.#removeRenderError = this.#viewer.scene.renderError.addEventListener(
+    this.#removeRenderError = this.#widget.scene.renderError.addEventListener(
       (_scene, error: unknown) => this.#renderLoop.fail(error),
     );
-    this.#revealSky = hideSkyUntilReady(this.#viewer.scene);
+    this.#revealSky = hideSkyUntilReady(this.#widget.scene);
+    this.#loadOrder = createLoadOrder(options.loadStallMs);
     this.#marks = createMarkTracker(
-      this.#viewer.scene,
+      this.#widget.scene,
       options.markTarget ?? null,
     );
     this.#contextController = new ContextController(
-      this.#viewer,
+      this.#widget,
       options.cesiumToken ?? '',
       options.contextImageryUrl ??
         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       (warning) => this.#setWarning(warning),
     );
     this.#overlay = new ContextOverlay({
-      addCredit: (credit) => this.#viewer.creditDisplay.addStaticCredit(credit),
-      scene: this.#viewer.scene,
+      addCredit: (credit) => this.#widget.creditDisplay.addStaticCredit(credit),
+      removeCredit: (credit) =>
+        this.#widget.creditDisplay.removeStaticCredit(credit),
+      scene: this.#widget.scene,
       worker: options.worker,
     });
     this.#naturalEarthUrl = options.naturalEarthUrl;
-    styleAtlasScene(this.#viewer);
-    this.#highlightLayer = new HighlightLayer(this.#viewer.scene);
-    this.#viewer.scene.primitives.add(this.#highlightLayer.collection);
+    styleAtlasScene(this.#widget);
+    this.#highlightLayer = new HighlightLayer(this.#widget.scene);
+    this.#widget.scene.primitives.add(this.#highlightLayer.collection);
     this.#layers = new ScientificLayers({
       frameBudgetMs:
         options.frameBudgetMs ??
@@ -177,22 +169,22 @@ class CesiumAtlasScene implements AtlasSceneController {
       highlight: this.#highlightLayer,
       marks: this.#marks,
       onCommit: (artifactKey) => this.#commit(artifactKey),
-      scene: this.#viewer.scene,
+      scene: this.#widget.scene,
       style: () => this.#scientificStyle(),
       worker: options.worker,
     });
     this.#removeMarks = this.#marks.onMark((mark) => {
-      if (mark === 'ready') this.#revealSky();
+      if (mark === 'ready') this.#queueStarfield();
       if (mark === 'surface-visible') this.#startContext();
     });
-    this.#unbindKeyboard = bindKeyboardCamera(this.#viewer, container);
-    this.#removeMoveEnd = this.#viewer.camera.moveEnd.addEventListener(() => {
-      const state = cameraState(this.#viewer);
+    this.#unbindKeyboard = bindKeyboardCamera(this.#widget, container);
+    this.#removeMoveEnd = this.#widget.camera.moveEnd.addEventListener(() => {
+      const state = cameraState(this.#widget);
       if (!state) return;
       for (const listener of this.#cameraListeners) listener(state);
     });
     this.#unbindPicking = bindAtlasPicking(
-      this.#viewer.scene,
+      this.#widget.scene,
       (value) => {
         this.#highlightLayer.setSelection(value);
         for (const listener of this.#pickListeners) listener(value);
@@ -201,7 +193,7 @@ class CesiumAtlasScene implements AtlasSceneController {
         this.#highlightLayer.setHover(value?.pick ?? null, this.#reducedMotion);
         for (const listener of this.#hoverListeners) listener(value);
       },
-      createSurfacePickResolver(this.#viewer.scene, {
+      createSurfacePickResolver(this.#widget.scene, {
         factor: () => this.#elevationFactor,
         geometry: () =>
           this.#layers.displayedLayer()?.geometry ?? this.#surfaceGeometry,
@@ -241,14 +233,39 @@ class CesiumAtlasScene implements AtlasSceneController {
     for (const listener of this.#commitListeners) listener(artifactKey);
   }
 
+  /**
+   * Step 1 of the load order, once. It settles when the borders' bytes have arrived, so the detail
+   * tier downloads while they are parsed and drawn, or when their load ends without them (it
+   * falls back on a failed fetch; the overlay never rejects). It reports each body chunk, so only
+   * a download with no new chunk for the stall window releases the detail tier early.
+   */
   #startContext(): void {
-    if (this.#contextStarted || this.#destroyed) return;
-    this.#contextStarted = true;
-    void this.#overlay.load(this.#naturalEarthUrl).then((status) => {
-      if (this.#destroyed) return;
-      if (status === 'ready') this.#marks.queue('context-ready');
-      this.#setContextStatus(status);
-    });
+    if (this.#destroyed) return;
+    this.#loadOrder.borders(
+      (progress) =>
+        new Promise<void>((settle) => {
+          const loading = this.#overlay.load(
+            this.#naturalEarthUrl,
+            settle,
+            progress,
+          );
+          // A throwing status listener stays an unhandled rejection, not an outcome of the step.
+          void loading.then((status) => {
+            if (this.#destroyed) return;
+            if (status === 'ready') this.#marks.queue('context-ready');
+            this.#setContextStatus(status);
+          });
+          void loading.then(() => settle());
+        }),
+    );
+  }
+
+  /** Step 3, once: the sky-box textures load when it is shown (§B.6.9). */
+  #queueStarfield(): void {
+    if (this.#destroyed) return;
+    // The borders start no later than this, so the starfield always has a step 1 to follow.
+    this.#startContext();
+    this.#loadOrder.starfield(() => this.#revealSky());
   }
 
   #setContextStatus(status: ContextStatus): void {
@@ -274,10 +291,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     try {
       await this.#layers.setArtifact(load, progress);
     } catch (error) {
-      if (!isAbortError(error)) {
-        this.#revealSky();
-        this.#startContext();
-      }
+      if (!isAbortError(error)) this.#queueStarfield();
       throw error;
     }
   }
@@ -315,7 +329,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     if (rebuild) await this.#layers.rebuild(progress);
     else if (edgeStyleChanged) await this.#layers.setEdgeStyle();
     else await this.#layers.setCellEdges(cellEdges);
-    this.#viewer.scene.requestRender();
+    this.#widget.scene.requestRender();
   }
 
   async setObservationStyle(
@@ -331,7 +345,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#observationStyle = { ...style };
     if (renderingChanged) await this.#layers.rebuild(progress);
     else this.#layers.setObservationAppearance(style, this.#layerVisibility);
-    this.#viewer.scene.requestRender();
+    this.#widget.scene.requestRender();
   }
 
   setBasemap(basemap: BasemapId): Promise<boolean> {
@@ -351,7 +365,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#layers.setVisibility(layers, this.#observationStyle.samplingAreas);
     this.#contextController.setVisible(layers.context);
     this.#overlay.setVisible(layers.countries);
-    this.#viewer.scene.requestRender();
+    this.#widget.scene.requestRender();
   }
 
   setMapPresentation(
@@ -360,21 +374,21 @@ class CesiumAtlasScene implements AtlasSceneController {
     dayNightLighting: boolean,
   ): void {
     this.#contextController.setAppearance(basemapOpacity, basemapBrightness);
-    this.#viewer.scene.globe.enableLighting = dayNightLighting;
-    this.#viewer.scene.requestRender();
+    this.#widget.scene.globe.enableLighting = dayNightLighting;
+    this.#widget.scene.requestRender();
   }
 
   setEarthOpacity(opacity: number): void {
     this.#earthOpacity = Math.min(1, Math.max(0.15, opacity));
-    applyEarthOpacity(this.#viewer.scene.globe, this.#earthOpacity);
+    applyEarthOpacity(this.#widget.scene.globe, this.#earthOpacity);
     this.#layers.setEarthOpacity(this.#earthOpacity);
     this.#highlightLayer.setEarthOpacity(this.#earthOpacity);
-    this.#viewer.scene.requestRender();
+    this.#widget.scene.requestRender();
   }
 
   setOceanColor(color: string): void {
-    applyOceanColor(this.#viewer.scene.globe, color);
-    this.#viewer.scene.requestRender();
+    applyOceanColor(this.#widget.scene.globe, color);
+    this.#widget.scene.requestRender();
   }
 
   setCountryBorderStyle(color: string, opacity: number): void {
@@ -387,7 +401,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     const target = this.#targetElevationFactor();
     const sequence = ++this.#elevationSequence;
     await animateValue(
-      this.#viewer,
+      this.#widget,
       this.#elevationFactor,
       target,
       this.#reducedMotion,
@@ -404,7 +418,7 @@ class CesiumAtlasScene implements AtlasSceneController {
       this.#layers.setElevationFactor(target, true);
       this.#highlightLayer.setElevationStyle(target > 0, target);
       this.#overlay.setElevationFactor(target, true);
-      this.#viewer.scene.requestRender();
+      this.#widget.scene.requestRender();
     }
   }
 
@@ -419,19 +433,19 @@ class CesiumAtlasScene implements AtlasSceneController {
       perspective: SceneMode.COLUMBUS_VIEW,
     }[mode];
     this.#mode = mode;
-    if (this.#viewer.scene.mode !== target) {
-      this.#viewer.camera.cancelFlight();
+    if (this.#widget.scene.mode !== target) {
+      this.#widget.camera.cancelFlight();
       await this.#layers.setSceneMode('perspective');
       await this.#overlay.setSceneMode('perspective');
       await new Promise<void>((resolve) => {
-        const remove = this.#viewer.scene.morphComplete.addEventListener(() => {
+        const remove = this.#widget.scene.morphComplete.addEventListener(() => {
           remove();
           resolve();
         });
         const duration = reducedMotion ? 0 : 0.8;
-        if (mode === 'globe') this.#viewer.scene.morphTo3D(duration);
-        else if (mode === 'map') this.#viewer.scene.morphTo2D(duration);
-        else this.#viewer.scene.morphToColumbusView(duration);
+        if (mode === 'globe') this.#widget.scene.morphTo3D(duration);
+        else if (mode === 'map') this.#widget.scene.morphTo2D(duration);
+        else this.#widget.scene.morphToColumbusView(duration);
       });
     }
     await this.#layers.setSceneMode(mode);
@@ -440,7 +454,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   }
 
   setCamera(camera: CameraState, animated: boolean): void {
-    setCameraState(this.#viewer, camera, animated);
+    setCameraState(this.#widget, camera, animated);
   }
 
   setSelection(pick: AtlasPick | null): void {
@@ -448,16 +462,16 @@ class CesiumAtlasScene implements AtlasSceneController {
   }
 
   home(animated: boolean): void {
-    setCameraState(this.#viewer, HOME_CAMERA, animated);
+    setCameraState(this.#widget, HOME_CAMERA, animated);
   }
 
   zoom(direction: 'in' | 'out'): void {
     const distance = Math.max(
       50_000,
-      this.#viewer.camera.positionCartographic.height * 0.28,
+      this.#widget.camera.positionCartographic.height * 0.28,
     );
-    if (direction === 'in') this.#viewer.camera.zoomIn(distance);
-    else this.#viewer.camera.zoomOut(distance);
+    if (direction === 'in') this.#widget.camera.zoomIn(distance);
+    else this.#widget.camera.zoomOut(distance);
   }
 
   displayedLayer(): DisplayedLayer | null {
@@ -470,6 +484,10 @@ class CesiumAtlasScene implements AtlasSceneController {
 
   removeSurface(artifactKey: string): void {
     this.#layers.removeSurface(artifactKey);
+  }
+
+  queueDetail(task: LoadTask): () => void {
+    return this.#loadOrder.detail(task);
   }
 
   onCommit(listener: (artifactKey: string) => void): () => void {
@@ -517,6 +535,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
+    this.#loadOrder.destroy();
     this.#elevationSequence += 1;
     this.#renderLoop.stop();
     this.#layers.destroy();
@@ -526,7 +545,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#unbindPicking();
     this.#removeMoveEnd();
     this.#removeRenderError();
-    this.#viewer.destroy();
+    this.#globe.destroy();
   }
 }
 
