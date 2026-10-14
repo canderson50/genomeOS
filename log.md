@@ -8,3 +8,6 @@
 2026-10-12 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-12T02:29Z, 0 Ready of 241 issues).
 2026-10-13 synced: fork main already at upstream f3357ce (no merge needed); fork main 370a952.
 2026-10-13 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-12T23:38Z, 0 Ready of 242 issues). No claude/issue-* drafts open.
+2026-10-14 synced: merged upstream 059c1cd (incl. #429 GA4, #437, #447-#450) into fork main; fork main e1f67f9.
+2026-10-14 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-14T10:18Z, 0 Ready of 251 issues). No claude/issue-* drafts open.
+2026-10-14 noted: claude/newsletter-signup (#4/upstream #441) and claude/atlas-picker-wordmark (#5/upstream #440) now conflict with upstream main; outside routine scope, reported to canderson50.
