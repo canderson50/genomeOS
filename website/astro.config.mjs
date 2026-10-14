@@ -4,6 +4,7 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import atlasScenePreload from './integrations/atlas-scene-preload.mjs';
+import { gaHead, gaMeasurementId } from './src/lib/ga.mjs';
 
 import { FAVICON_SVG, rasterIconLinks } from './src/lib/favicons.ts';
 
@@ -12,6 +13,9 @@ const base = process.env.BASE_PATH ?? '/';
 const outDir = process.env.OUT_DIR ?? 'dist';
 const normalizedBase =
   base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;
+// #422: Google Analytics only when the build sets PUBLIC_GA_MEASUREMENT_ID (the production Pages
+// build); a malformed ID fails here.
+const gaId = gaMeasurementId();
 
 export default defineConfig({
   site,
@@ -29,6 +33,7 @@ export default defineConfig({
       disable404Route: true,
       components: {
         EditLink: './src/components/starlight/EditLink.astro',
+        Footer: './src/components/starlight/Footer.astro',
         SocialIcons: './src/components/starlight/SocialIcons.astro',
       },
       customCss: [
@@ -64,6 +69,8 @@ export default defineConfig({
             ).href,
           },
         },
+        // #422: the same analytics head as the site layout (src/components/Analytics.astro).
+        ...gaHead(),
       ],
       social: [
         {
@@ -103,13 +110,13 @@ export default defineConfig({
               {
                 name: 'cesium',
                 // JavaScript only. CSS must stay out of the group: AtlasExplorer.tsx
-                // still imports cesium/Build/Cesium/Widgets/widgets.css, and if that
-                // stub lands in the Cesium chunk the island gains a static
+                // still imports Cesium's CesiumWidget and Viewer stylesheets, and if
+                // their stub lands in the Cesium chunk the island gains a static
                 // import"./cesium.<hash>.js", loading all of Cesium with the island
                 // and undoing Task 35 (B2.12)'s lazy scene chunk.
                 //
                 // The Atlas-owned render loop joins it: its frame callback is only
-                // viewer.resize() + viewer.render(), the work Cesium's default loop did
+                // widget.resize() + widget.render(), the work Cesium's default loop did
                 // from this chunk, so the harness keeps counting Cesium renders as
                 // Cesium (atlas-scene is its only importer).
                 test: /[\\/]node_modules[\\/](?:cesium|@cesium[\\/][^\\/]+)[\\/].*\.js$|[\\/]src[\\/]atlas[\\/]scene[\\/]render-loop\.ts$/,
@@ -121,12 +128,24 @@ export default defineConfig({
     },
     define: {
       CESIUM_BASE_URL: JSON.stringify(`${normalizedBase}cesium/`),
+      // #422: a build-time constant, so a build without analytics drops the client code that sends
+      // to gtag (src/lib/analytics.ts, src/lib/cookie-control.ts).
+      'import.meta.env.PUBLIC_GA_MEASUREMENT_ID': JSON.stringify(gaId ?? ''),
     },
     // The Atlas data worker is a module worker sharing ES modules with the island (fast-load design §B.6.3).
     worker: { format: 'es' },
     plugins: [
       viteStaticCopy({
-        targets: ['Assets', 'ThirdParty', 'Widgets', 'Workers'].map((name) => ({
+        // The engine reads Assets, ThirdParty and Workers through CESIUM_BASE_URL. Of the
+        // widget layer only the Earth style picker's thumbnails are used: the globe is a
+        // CesiumWidget whose CSS is bundled (issue #446).
+        targets: [
+          'Assets',
+          'ThirdParty',
+          'Workers',
+          'Widgets/Images/ImageryProviders',
+          'Widgets/Images/TerrainProviders',
+        ].map((name) => ({
           src: `node_modules/cesium/Build/Cesium/${name}`,
           dest: 'cesium',
           rename: { stripBase: 4 },

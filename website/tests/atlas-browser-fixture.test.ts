@@ -10,8 +10,11 @@ import {
   artifactTierKey,
   corruptArtifactTier,
   delayArtifactTier,
+  extractArtifactDataBase,
   extractInlineCatalog,
   fetchedKeys,
+  GTAG_SCRIPT_PATTERN,
+  GTAG_STUB_SCRIPT,
   installAtlasBrowserFixture,
   readE2eCatalog,
   readE2eObject,
@@ -22,6 +25,7 @@ import {
 const websiteRoot = path.resolve(import.meta.dirname, '..');
 
 const TINY: FixtureCatalog = {
+  context_sources: [],
   grids: { aaaa: { url: 'grids/h3-r3.aaaa.gosa' } },
   artifacts: [
     {
@@ -141,10 +145,13 @@ describe('fixture module boundary', () => {
         'E2E_ARTIFACT_DATA_BASE',
         'E2E_CATALOG_PATH',
         'E2E_FIXTURE_DIR',
+        'GTAG_SCRIPT_PATTERN',
+        'GTAG_STUB_SCRIPT',
         'artifactTierKey',
         'corruptArtifactTier',
         'delayArtifactTier',
         'displayedArtifactIds',
+        'extractArtifactDataBase',
         'extractInlineCatalog',
         'failArtifactTier',
         'fetchedKeys',
@@ -233,6 +240,24 @@ describe('catalog helpers', () => {
     ]);
   });
 
+  it('leaves artifact objects to the network when the build bakes an absolute base', async () => {
+    const html = appHtml(readE2eCatalog()).replace(
+      'id="atlas-catalog"',
+      'id="atlas-catalog" data-artifact-data-base="http://127.0.0.1:4323/"',
+    );
+    expect(extractArtifactDataBase(html)).toBe('http://127.0.0.1:4323/');
+    expect(extractArtifactDataBase(appHtml(TINY))).toBeNull();
+    const { page, routes } = fakePage(html);
+    await installAtlasBrowserFixture(page, {
+      appUrl: 'http://fixture.invalid/app/cross-origin',
+    });
+    // Only the tile block and the gtag.js stub (#422): no artifact route.
+    expect(routes.map(({ matcher }) => matcher)).toEqual([
+      'https://tile.openstreetmap.org/**',
+      GTAG_SCRIPT_PATTERN,
+    ]);
+  });
+
   it('matches a key at the end of any base', () => {
     const key = 'surfaces/hbs-rs334/v3/map-2026-08/render.1111.gosa';
     expect(
@@ -269,6 +294,26 @@ describe('committed e2e tree', () => {
         appUrl: 'http://fixture.invalid/app/a',
       }),
     ).rejects.toThrow('npm run build:e2e');
+  });
+
+  it('answers gtag.js with the stub so no browser test reaches Google (#422)', async () => {
+    const { page, routes } = fakePage(appHtml(readE2eCatalog()));
+    await installAtlasBrowserFixture(page, {
+      appUrl: 'http://fixture.invalid/app/gtag',
+    });
+    const stub = routes.find(({ matcher }) => matcher === GTAG_SCRIPT_PATTERN);
+    expect(GTAG_SCRIPT_PATTERN).toBe('https://www.googletagmanager.com/**');
+    const route = new FakeRoute(
+      'https://www.googletagmanager.com/gtag/js?id=G-TEST123',
+    );
+    await stub?.handler(route);
+    expect(route.fulfilled).toEqual([
+      {
+        body: GTAG_STUB_SCRIPT,
+        contentType: 'text/javascript',
+        status: 200,
+      },
+    ]);
   });
 
   it('fulfils catalog keys from the tree', async () => {

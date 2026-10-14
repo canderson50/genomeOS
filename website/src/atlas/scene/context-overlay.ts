@@ -1,17 +1,24 @@
-/** Worker-parsed Natural Earth borders and labels for Atlas design §11 (spec 2026-10-07 §B.6.9).
+/** Worker-decoded Natural Earth borders and labels for Atlas design §11 (spec 2026-10-07 §B.6.9,
+ * §B.10).
  *
  * Replaces GeoJsonDataSource, whose single onload task exceeded every
- * long-task budget. The GeoJSON is parsed in the data worker; borders and
- * labels are added in frame-budgeted slices; the surface-following height
- * adjustment is skipped at elevation 0 and computed in the worker from
- * render-tier rows on the first non-zero factor, or once the worker has parsed
- * the context when that factor came first.
+ * long-task budget. The compact GOBD borders (§B.10, issue #445) are decoded
+ * in the data worker; borders and labels are added in frame-budgeted slices;
+ * the surface-following height adjustment is skipped at elevation 0 and
+ * computed in the worker from render-tier rows on the first non-zero factor,
+ * or once the worker has decoded the context when that factor came first.
  *
  * Calls may land between slices. The renderer for the latest view is built
  * and shown; an elevation or style change reaches the rings and labels added
  * so far, and later ones are added at the height and colour their renderer is
  * drawn with. When the scene is destroyed (unmount, "Retry globe") the load
  * stops at its next yield without a warning.
+ *
+ * The Natural Earth credit is shown from construction, not once the deferred
+ * load has parsed: on phones the credit block docks the legend strip, and a
+ * credit that arrived after the reveal wrapped the credit text to a second
+ * line and moved the strip up 4 px (#430). A load that falls back before the
+ * context is parsed withdraws it, so it stays exactly when it used to appear.
  *
  * Cesium copies a new label glyph into its texture atlas only after an await,
  * so the frame that created the glyph can find the atlas queue empty and ask
@@ -107,24 +114,57 @@ export interface ContextOverlayOptions {
     requestRender(): void;
   };
   addCredit: (credit: Credit) => void;
-  fetchBytes?: (url: string) => Promise<ArrayBuffer>;
+  removeCredit: (credit: Credit) => void;
+  /** Fetches the borders, calling `onProgress` once per body chunk. */
+  fetchBytes?: (url: string, onProgress?: () => void) => Promise<ArrayBuffer>;
   createLabels?: () => LabelSink;
   slice?: Omit<SliceOptions, 'onSlice' | 'signal'>;
   now?: () => number;
 }
 
-async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
+/**
+ * Reads the body chunk by chunk and reports each one, so the post-reveal load order sees a slow
+ * download making progress rather than a stall (spec 2026-10-07 §B.6.9).
+ */
+async function fetchArrayBuffer(
+  url: string,
+  onProgress?: () => void,
+): Promise<ArrayBuffer> {
   const response = await fetch(url);
   if (!response.ok)
     throw new Error(
       `Natural Earth request failed with HTTP ${response.status}`,
     );
-  return response.arrayBuffer();
+  if (!response.body) return response.arrayBuffer();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      length += value.byteLength;
+      onProgress?.();
+    }
+  } catch (error) {
+    // A failed read or a throwing listener releases the body rather than leaving it downloading.
+    void reader.cancel(error).catch(() => undefined);
+    throw error;
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
 }
 
 export class ContextOverlay {
   readonly collection = new PrimitiveCollection();
   readonly #options: ContextOverlayOptions;
+  readonly #credit = new Credit(NATURAL_EARTH_CREDIT, true);
   readonly #now: () => number;
   readonly #heights = new Map<string, ContextHeights>();
   readonly #pendingHeights = new Set<string>();
@@ -159,14 +199,25 @@ export class ContextOverlay {
     this.#options = options;
     this.#now = options.now ?? (() => performance.now());
     options.scene.primitives.add(this.collection);
+    options.addCredit(this.#credit);
   }
 
   isReady(): boolean {
     return this.#ready;
   }
 
-  load(url: string): Promise<ContextLoadStatus> {
-    this.#loading ??= this.#load(url);
+  /**
+   * Loads once; a later call returns the first call's promise. `onProgress` hears each body chunk,
+   * and `onFetched` hears when the bytes have arrived, before they are parsed and drawn: the
+   * borders no longer need the network, so the next post-reveal load may start (spec 2026-10-07
+   * §B.6.9). A failed fetch never calls `onFetched`.
+   */
+  load(
+    url: string,
+    onFetched?: () => void,
+    onProgress?: () => void,
+  ): Promise<ContextLoadStatus> {
+    this.#loading ??= this.#load(url, onFetched, onProgress);
     return this.#loading;
   }
 
@@ -226,13 +277,20 @@ export class ContextOverlay {
     this.#options.scene.requestRender();
   }
 
-  async #load(url: string): Promise<ContextLoadStatus> {
+  async #load(
+    url: string,
+    onFetched?: () => void,
+    onProgress?: () => void,
+  ): Promise<ContextLoadStatus> {
     try {
-      const bytes = await (this.#options.fetchBytes ?? fetchArrayBuffer)(url);
+      const bytes = await (this.#options.fetchBytes ?? fetchArrayBuffer)(
+        url,
+        onProgress,
+      );
+      onFetched?.();
       this.#throwIfDestroyed();
       const parsed = await this.#options.worker.parseContext(bytes);
       this.#throwIfDestroyed();
-      this.#options.addCredit(new Credit(NATURAL_EARTH_CREDIT, true));
       this.#parsed = parsed;
       // The worker computes heights from the context it has just parsed, so a factor set before
       // this point is served now.
@@ -253,17 +311,21 @@ export class ContextOverlay {
       this.#applyElevation(true);
       return 'ready';
     } catch (error) {
-      // Unmount and "Retry globe" destroy the scene (and stop the worker): not a load failure.
-      if (!this.#isDestroyed())
+      // Unmount and "Retry globe" destroy the scene (and stop the worker), and the
+      // CesiumWidget's credits with it: not a load failure.
+      if (!this.#isDestroyed()) {
         console.warn(
           'Geographic reference overlay could not be loaded.',
           error,
         );
+        // Nothing was drawn without the parsed context.
+        if (!this.#parsed) this.#options.removeCredit(this.#credit);
+      }
       return 'fallback';
     }
   }
 
-  /** Viewer.destroy() destroys the scene's primitives, this collection among them. */
+  /** CesiumWidget.destroy() destroys the scene's primitives, this collection among them. */
   #isDestroyed(): boolean {
     return this.collection.isDestroyed();
   }
