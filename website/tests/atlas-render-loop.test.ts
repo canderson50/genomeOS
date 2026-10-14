@@ -112,7 +112,7 @@ const container = {} as HTMLElement;
 function scene() {
   const controller = createAtlasScene(container, {
     frameBudgetMs: 8,
-    naturalEarthUrl: 'ne.geojson',
+    naturalEarthUrl: 'borders.bin',
     worker: {} as AtlasWorkerClient,
   });
   const globe = globes.at(-1)!;

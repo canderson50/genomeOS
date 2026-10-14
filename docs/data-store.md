@@ -21,7 +21,8 @@ data/
                   cells.parquet         the citable per-cell surface (§5, §6)
                   manifest.json         what was published, and under what assumptions
     INVENTORY.json                      checksums of everything above
-reference/                              committed: Natural Earth countries, Piel 2013 estimates
+reference/                              committed: Natural Earth countries (1:110m, and the 1:50m
+                                        admin-0 source of the Atlas borders), Piel 2013 estimates
 tests/fixtures/                         committed: tiny, hand-checkable inputs
 docs/figures/                           committed: review figures
 ```
@@ -92,6 +93,16 @@ and `observations_bytes` to `catalog.json`. It is byte-deterministic. The object
 with `--with-downloads` they and the canonical JSON are published to the public bucket (the "Public
 web data bucket" section below), the JSON stays the citable download, and only `catalog.json` is
 committed.
+
+The explorer's country borders are derived too. `scripts/encode_natural_earth_borders.py` reads
+`reference/ne_50m_admin_0_countries.geojson`, refuses it unless its sha256 is the pinned
+revision's, and writes the committed `website/public/data/atlas/ne-50m-admin-0.borders.bin`
+(positions on a 0.0001° lattice, shared borders stored once; fast-load spec §B.10). A vertex that
+rounding would move into another H3 cell is snapped back into its own, at every resolution of
+`catalog.json`'s `grids`, so border heights over a surface are exact. The site no longer ships the
+GeoJSON. Re-run the script after changing the source, the format or the catalog's grid
+resolutions; `--check` fails when the committed file is stale, and the Python tests check it byte
+for byte.
 
 ## Immutability is enforced, not just documented
 

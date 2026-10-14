@@ -598,7 +598,7 @@ AtlasDataProvider (main thread)  ── fetch (matches preloads; stall timeout; 
                                    verify sha256 → decode/validate (B.3) → cross-tier checks (B.2)
                                    topology as soon as the grid arrives (cached per grid)
                                    per chunk, camera order: surface mesh + support (mask) buffers
-                                   edges ring buffers; Natural Earth parse; observation anchor heights
+                                   edges ring buffers; Natural Earth decode; observation anchor heights
                                  ◄── transferable typed arrays, one message per chunk
 scene (when import resolves) ── observations → chunk scheduler (B.6.7) → edges, context (deferred)
 ```
@@ -735,12 +735,13 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    buffers: the worker sends exact `primitiveCountMax`/`vertexCountMax` first; polylines are added to
    the `BufferPolylineCollection` (width 2, `allowPicking: false`) in slices sized to the frame budget
    (~2–4k per frame on desktop, fewer at 4×), with `scene.requestRender()` after each slice and a
-   `MessageChannel` yield (no `setTimeout(0)` clamps). The Natural Earth GeoJSON is fetched after
-   `atlas:surface-visible`, parsed in the worker into ring vertex buffers and a label table, and drawn
-   as a time-sliced `BufferPolylineCollection` plus a `LabelCollection` added in slices;
-   `GeoJsonDataSource` and its entities are dropped. Its height adjustment is skipped at elevation 0
-   and computed in the worker from grid rows on the first non-zero factor (or, when that factor
-   comes first, as soon as the worker has parsed the GeoJSON). The sky box is hidden
+   `MessageChannel` yield (no `setTimeout(0)` clamps). The Natural Earth borders are fetched after
+   `atlas:surface-visible` as the compact GOBD file of §B.10 (the upstream GeoJSON until #445),
+   decoded in the worker into ring vertex buffers and a label table, and drawn as a time-sliced
+   `BufferPolylineCollection` plus a `LabelCollection` added in slices; `GeoJsonDataSource` and its
+   entities are dropped. Their height adjustment is skipped at elevation 0 and computed in the worker
+   from grid rows on the first non-zero factor (or, when that factor comes first, as soon as the
+   worker has decoded the borders). The sky box is hidden
    (`scene.skyBox.show = false` right after the globe is built, keeping sun and moon) until
    `data-atlas-ready`, then shown.
 10. **No coarse aggregated tier.** Averaging res-4 children into res-3/2 parents is an aggregation that
@@ -837,6 +838,159 @@ mime-db); `serve:test` becomes
 variable came from #412, picked up when Part B was rebased onto main; amended under R30).
 The Part B PR records what GitHub Pages actually sends for `.gosa` (`curl -H 'Accept-Encoding:
 gzip'`).
+
+### B.10 Compact Natural Earth borders (issue #445)
+
+Added after Part B shipped. The country borders were the upstream 1:50m admin-0 GeoJSON,
+3,083,490 bytes (1,027,460 gzip as Pages served it), the largest first-visit download after the
+Cesium bundle, although the overlay draws only polygon outer rings and reads 6 of its 168
+properties. The site now serves a derived file, `ne-50m-admin-0.borders.bin` (GOBD v1), 704,592
+bytes and 278,523 gzip.
+
+**Candidates.** Measured on the pinned source, each at the 10⁻⁴-degree lattice, plus the GOBD
+lattice sweep. Gzip is level 6, which local `serve` sends byte for byte. Decode is the
+cold median of 9 fresh dedicated workers in headless Chromium 153 (M3 Pro, unthrottled, shared
+machine, load average about 18), from bytes to `NaturalEarthBuffers`. "Cells" counts the drawn
+vertices whose H3 resolution-4 cell changes. Every row is plain rounding except the shipped one,
+which then snaps those vertices back into their cells (**Heights**, below): the same size and
+decode work, a slightly larger worst error, and no cell changes.
+
+| Encoding                                  | gzip bytes | vs today | decode  | max error         | cells |
+| ----------------------------------------- | ---------- | -------- | ------- | ----------------- | ----- |
+| today: upstream GeoJSON, all properties   | 1,022,612  | 1×       | 17.3 ms | 0                 | 0     |
+| (c) GeoJSON, 4 decimals, 6 properties     | 690,465    | 1.48×    | 11.2 ms | 0.00005°, 7.82 m  | 8     |
+| (a) TopoJSON, quantized 10⁻⁴, shared arcs | 376,766    | 2.71×    | 8.3 ms  | 0.00005°, 7.82 m  | 8     |
+| (b) GOBD 10⁻⁴                             | 278,523    | 3.67×    | 4.0 ms  | 0.00005°, 7.82 m  | 8     |
+| **(b) GOBD 10⁻⁴, snapped** (shipped)      | 278,523    | 3.67×    | 4.0 ms  | 0.00008°, 8.72 m  | 0     |
+| GOBD 10⁻⁶ (lossless: the source has 6 dp) | 410,472    | 2.49×    | 4.1 ms  | 0                 | 0     |
+| GOBD 10⁻⁵                                 | 337,186    | 3.03×    | n/m     | 0.000005°, 0.79 m | 3     |
+| GOBD 10⁻³                                 | 207,739    | 4.92×    | n/m     | 0.0005°, 77.6 m   | 87    |
+
+GOBD wins on size and decode at every lattice; JSON text of the same arcs (TopoJSON) gzips 35%
+larger and decodes 2× slower. At 10⁻⁴ the error (8.72 m at worst, after snapping) is under half a
+pixel at any camera height above about 22 km (1440 px wide, 60° field of view), where the view
+spans about half a res-4 cell, and far below the 1:50m source's own generalisation (median segment
+about 7 km); it is the coarsest of the measured lattices that keeps that. Lossless 10⁻⁶ is 2.49×
+smaller and changes nothing. Snapping already makes every height exact at 10⁻⁴, so lossless would
+buy only exact positions. Switching to it is not a one-constant change: besides `QUANTIZATION`,
+the error bounds are stated by hand (`MAX_ERROR_DEGREES` and `MAX_ERROR_METRES` in the generator,
+`BORDERS_MAX_ERROR_DEGREES` and `BORDERS_MAX_ERROR_METRES` in `natural-earth-codec.ts`), and the
+tests pin the lattice, those bounds and the 8 snapped vertices
+(`tests/test_encode_natural_earth_borders.py`,
+`website/tests/atlas-geometry-natural-earth.test.ts`); all of them would need restating.
+
+**Source and provenance.** The upstream file stays the generator's input, outside the site, as
+`reference/ne_50m_admin_0_countries.geojson` (sha256
+`3e458fc036ad0a66411f2c1e6cac49c5d7bfb81cb1123bc513b22511a2b7fdeb`, revision
+`ca96624a56bd078437bca8184e78163e5039ad19`; the same git blob the site shipped).
+`scripts/encode_natural_earth_borders.py` (stdlib, numpy and h3) refuses any other digest, validates
+the GeoJSON, with every violation a hard error, and writes the file deterministically. It takes the
+H3 resolutions to snap for from the published `catalog.json`'s `grids`. It decodes its own output
+against the snapped lattice before writing; `--check` fails when the committed file is stale,
+including after a change to the catalog's grid resolutions. The catalog's `context_sources` entry
+keeps id, label, licence, revision and upstream `source_url`; only `url` changes.
+`export_atlas_web.py` takes the key, revision and URL from the generator, so a re-export writes the
+same entry. The file header repeats the provenance (`source: {revision, sha256, url}`).
+
+**Format (GOBD v1, little-endian).** `"GOBD"`, u16 `format_version` = 1, u16 `reserved` = 0, u32
+`header_length`, header JSON, 0x00 padding to a 4-byte boundary, then the payload; nothing may
+follow it. The header is exactly `{arcs, features, quantization, source}`:
+
+- `arcs`: each arc's vertex count, at least 2;
+- `features`: `{polygons, properties}` in source order. A polygon lists its rings, outer first;
+  a ring lists signed arc references, where `~i` walks arc `i` backwards. Consecutive arcs share
+  their joining vertex, and a ring's last arc ends on its first vertex;
+- `properties`: a subset of ADMIN, NAME, NAME_LONG (strings) and LABEL_X, LABEL_Y, MIN_LABEL
+  (finite numbers);
+- `quantization`: lattice points per degree, an integer in [1, 10⁶];
+- `source`: as above.
+
+The payload holds V = Σ`arcs` vertices as 2V u32: interleaved lon and lat lattice integers in arc
+order, each delta-coded from the previous value on its axis (from 0), zigzag-coded, then
+byte-shuffled (byte k of element i at k·2V + i). A coordinate is `lattice / quantization`.
+
+Arcs come from cutting every ring at junctions: vertices whose neighbours differ between their
+occurrences, plus every ring's first vertex, so each ring decodes in source order. Each distinct
+cut is stored once; 1,965 arcs hold 80,681 vertices for 97,981 ring positions (365 of 2,330
+references walk an arc backwards). The header is 59,132 bytes (17,039 gzip), the payload 645,448
+(259,986 gzip).
+
+**Hard errors** (the same checks, in this order, in the Python and TypeScript decoders):
+
+- too short for the preamble; wrong magic or version; reserved ≠ 0;
+- header past the end, not UTF-8 JSON, or not an object; non-zero padding;
+- the strict header schema: keys, quantization, source, arc counts, each feature's keys,
+  properties and polygon and ring nesting, and every arc reference an integer in range;
+- an arc no ring references;
+- a length that is not payload start + 8V;
+- a coordinate outside ±180°/±90°;
+- per ring, in order: arcs that do not meet end to start, a ring that does not close, or fewer
+  than four positions.
+
+One check differs between the two. `JSON.parse` reads `2.0` and `2e0` as the Number 2, so the
+TypeScript decoder accepts an integral count, quantization or arc reference written with a fraction
+or exponent, and the Python decoder (`_is_count`, `isinstance(ref, int)`) refuses it. The generator's
+canonical JSON never writes one. A test on each side pins its behaviour.
+
+The worker posts a decode failure as a `validation` error, and the overlay falls back as before.
+
+**What the overlay draws (unchanged).** The decoder fills the same `NaturalEarthBuffers` the
+GeoJSON parse did: outer rings closed and then their first vertex repeated, holes decoded and
+checked but not drawn, and one label per distinct text (`labelFor`). The tests hold it to that
+parse, kept verbatim in `website/tests/helpers/natural-earth-geojson.ts`, run on the pinned source:
+
+- `ringOffsets` (1,620 rings, 101,052 vertices) and all 242 labels are identical;
+- no coordinate moves more than 0.00008° per axis, and no position more than 8.8 m (8.72 m
+  measured, at a snapped vertex; rounding alone moves a position at most 0.00005°, 7.82 m);
+- the credit text is unchanged.
+
+**Heights.** `naturalEarthHeights` is unchanged and runs on the decoded positions. It reads a
+vertex only through `latLngToCell(lat, lon, grid.resolution)`, so a height is exact when the decoded
+vertex is in its source's cell. Rounding alone carried 8 of the 101,052 drawn vertices (8 of 78,539
+distinct positions) into a neighbouring res-4 cell. Over the 30 published layers and both metrics,
+269 of their 480 heights differed, by up to 2,786 m at exaggeration 1 (`g6pd-deficiency`
+`post_sd`).
+
+The generator therefore snaps each such vertex. It takes the nearest lattice point (great-circle
+distance from the source, ties to the smaller lattice x, then y) that is in the source's cell at
+every resolution of the catalog's `grids`, which is resolution 4 today. That point must be at most
+2 steps per axis from the rounded point; if there is none, encoding fails with an error. Each of
+the 8 moved one step. Every border and label height now matches the GeoJSON build bit for bit:
+
+- on all 30 layers × 2 metrics, checked by a one-off script over the git-ignored render tiers;
+- in CI, pytest checks every committed position's cell with h3-py, and vitest checks every drawn
+  vertex's cell with h3-js, plus the heights on the res-4 parity fixture.
+
+h3-py and h3-js are both H3 4.5.0, but they convert degrees to radians with different
+floating-point steps. The vitest therefore pins the 8 snapped vertices to the cells h3-py chose. A
+one-off check found the two libraries agree on all 597,678 cells it compared: every position,
+source and decoded, at resolutions 3 to 5. Both tests read the published catalog's grid
+resolutions, so a grid at a resolution the file was not snapped for fails them (at resolution 5,
+28 positions would change cell). Re-run the generator when those resolutions change.
+
+**Screen.** `website/scripts/capture-atlas-borders.mjs` captures seven views before and after:
+borders alone on the globe, in 2D, at 1,500 km, 60 km and 20 km; the elevated HbS surface; and a
+tilted elevated view over the snapped Gulf of Gabès vertex. Two captures of one build are
+byte-identical, so the counts measure the change alone:
+
+- at most 0.1136% of pixels differ by more than 2/255 (at 20 km, where 8.8 m is about half a
+  pixel);
+- 0.0116% on the default globe;
+- in the tilted view, nothing differs by more than 2/255 in a 100×60 px window around the snapped
+  vertex. Before snapping, it dipped about 10.8 km at ×5, and 42 pixels there differed by more
+  than 16/255;
+- every view passes the 0.5% gate of §B.1.
+
+`docs/figures/atlas-compact-borders-parity.receipt.json` records the counts.
+
+**Serving.** `.bin` is `application/octet-stream`, which Pages gzips (the deployed `.gosa` grid
+came back `content-encoding: gzip` on 2026-10-13) and local `serve` gzips to 278,523 bytes. The
+file stays a site-base key (§B.4, C.1.1).
+
+**Out of scope.** `ne-50m-populated-places.json` (118,304 bytes, 32,640 gzip as served) is already
+a compact derived table, not GeoJSON, and is unchanged. Part C (#437) rewrites `catalog.json` as a
+whole, and the catalog is one canonical line, so the two changes conflict on that line: keep
+#437's catalog with `context_sources[0].url = "ne-50m-admin-0.borders.bin"`.
 
 ---
 
