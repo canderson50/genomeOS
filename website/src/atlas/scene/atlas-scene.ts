@@ -26,6 +26,7 @@ import {
   type ContextWarningUpdate,
 } from './context-controller';
 import { ContextOverlay } from './context-overlay';
+import { installGlobeOffset, type GlobeOffset } from './globe-offset';
 import { createGlobeWidget, type GlobeWidget } from './globe-widget';
 import { HighlightLayer } from './highlight-layer';
 import { bindAtlasPicking } from './picking';
@@ -95,6 +96,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   >();
   readonly #warnings = new Map<ContextWarning['id'], ContextWarning>();
   readonly #renderLoop: RenderLoop;
+  readonly #globeOffset: GlobeOffset;
   readonly #unbindKeyboard: () => void;
   readonly #unbindPicking: () => void;
   readonly #removeMoveEnd: () => void;
@@ -135,6 +137,7 @@ class CesiumAtlasScene implements AtlasSceneController {
       this.#widget.resize();
       this.#widget.render();
     });
+    this.#globeOffset = installGlobeOffset(this.#widget.scene);
     this.#removeRenderError = this.#widget.scene.renderError.addEventListener(
       (_scene, error: unknown) => this.#renderLoop.fail(error),
     );
@@ -457,6 +460,10 @@ class CesiumAtlasScene implements AtlasSceneController {
     setCameraState(this.#widget, camera, animated);
   }
 
+  setLeftObstruction(width: number): void {
+    this.#globeOffset.setCoveredLeft(width);
+  }
+
   setSelection(pick: AtlasPick | null): void {
     this.#highlightLayer.setSelection(pick);
   }
@@ -545,6 +552,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#unbindPicking();
     this.#removeMoveEnd();
     this.#removeRenderError();
+    this.#globeOffset.destroy();
     this.#globe.destroy();
   }
 }
