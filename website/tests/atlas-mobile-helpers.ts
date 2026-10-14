@@ -49,6 +49,19 @@ export async function waitForAtlasReady(page: Page): Promise<void> {
 }
 
 /**
+ * The surface reveal wave (#453) has passed: every cell is grown and can be hovered or picked.
+ * Every test that points at the surface waits here first. The explorer reads `pending` until
+ * the scene's first wave, which starts with the first surface chunk, so call it once the map is
+ * ready; under reduced motion it reads `done` at once.
+ */
+export async function waitForRevealWave(page: Page): Promise<void> {
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-wave',
+    'done',
+  );
+}
+
+/**
  * Wait for the cold reveal and the loads after it to finish: ready, cell edges, the drawn borders
  * and the exact cell values. Until then the scene requests a frame per border slice, and under the
  * CI runners' software WebGL each frame is a long task, so a page call queued behind them can take
@@ -268,6 +281,7 @@ async function canvasAt(page: Page, point: Point): Promise<boolean> {
  * point is still bare canvas; otherwise it would tap the new sheet's handle.
  */
 export async function tapSelectNearCenter(page: Page): Promise<void> {
+  await waitForRevealWave(page);
   const inspector = page.locator('.atlas-inspector');
   // The camera target: the canvas centre on a phone, beside the controls on desktop (#452).
   const centre = await globeViewCentre(page);
