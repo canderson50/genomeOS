@@ -1,0 +1,237 @@
+---
+/**
+ * Contact (Contact page spec; part of the site redesign, #454): write to the genomeOS Foundation
+ * without the site ever holding or sending a message.
+ *
+ *   intro      the shared PageIntro, split: note, H1, lede; then the plainest way to write, first
+ *              on every screen (owner request, 2026-10-14): Email us, a plain mailto:, and the
+ *              address itself in view, with a glyph that copies it, all three on one row
+ *   templates  a band of its own, "Or start from a template": 1 what it's about (purposes, real
+ *              radios), 2 what you'd offer (for a contribution, toggle buttons), 3 send it (open
+ *              the composed draft in the visitor's email app); the live letter beside them, or
+ *              after them on a phone, with its own copy glyph
+ *   problem    last, a secondary link: problems go to GitHub Issues, not email
+ *
+ * The address is in no served file (src/lib/contact-address.ts): the page serves it spelled out,
+ * and the island joins it from stored parts at the first sign of a person (owner, 2026-10-15),
+ * each place keeping the spelled-out form's box so nothing moves. No `mailto:` is in the page until
+ * a visitor reaches for Email us (contact.ts), and every draft is built then
+ * (src/lib/contact-draft.ts) and handed to the visitor's own email. If a `mailto:` click leaves the
+ * page in front, nothing opened, and a hint next to the control says what still works. Nothing is
+ * sent, stored or tracked. Without JavaScript Email us and the templates stay hidden and a
+ * `<noscript>` line spells the address out for a person to type; if JavaScript runs but the island
+ * never does, the pre-paint script puts the page back that way at `load`.
+ *
+ * `?topic=contribute&offer=data,funding` (or `?topic=question|partner|press`) preselects, before the
+ * first paint (contact-paint.ts); choosing in the page keeps the query in step for sharing.
+ */
+import ContactIcon from '../components/contact/ContactIcon.astro';
+import ContactLetter from '../components/contact/ContactLetter.astro';
+import {
+  contactDirectScript,
+  contactPaintScript,
+  SPELLED_OUT,
+  TOPIC_INPUT,
+} from '../components/contact/contact-paint';
+import PageIntro from '../components/PageIntro.astro';
+import { GITHUB_REPOSITORY } from '../data/nav';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import {
+  OFFERS,
+  OFFER_LABELS,
+  TOPICS,
+  TOPIC_LABELS,
+} from '../lib/contact-draft';
+import '../styles/pages/contact.css';
+
+const ROOT = 'contact-composer';
+const ISSUES = `${GITHUB_REPOSITORY}/issues/new/choose`;
+---
+
+<SiteLayout
+  title="Contact"
+  description="Write to the genomeOS Foundation: offer code, data, expertise or funding, ask a question, propose a partnership or make a press inquiry."
+>
+  <div class="contact-page" data-concept>
+    <ContactIcon sprite />
+    <PageIntro
+      layout="split"
+      note="Contact"
+      title="Start the conversation."
+      lede="Email us, or let this page draft the email for you."
+    >
+      <div slot="figure" class="contact-reach">
+        <noscript>
+          <p class="contact-noscript">
+            Email us at <strong>{SPELLED_OUT}</strong>.
+          </p>
+        </noscript>
+        <p class="contact-noscript" data-contact-fallback hidden>
+          Email us at <strong>{SPELLED_OUT}</strong>.
+        </p>
+
+        {
+          /*
+           * The plainest way to write, first: the Atlas pill's look at call-to-action size, whose
+           * mailto: the island sets when a visitor reaches for it, and the address in view with
+           * its copy glyph: one row, centres level, wherever the three fit on a line.
+           */
+        }
+        <div class="contact-direct" data-contact-direct hidden>
+          <a class="contact-email" href="#contact-address" data-email-us>
+            <ContactIcon name="mail" class="contact-email__icon" />
+            Email us
+          </a>
+          <p class="contact-address">
+            <span class="contact-address__value" data-spelled={SPELLED_OUT}
+              ><span id="contact-address" data-address>{SPELLED_OUT}</span
+              ></span
+            ><button
+              type="button"
+              class="contact-glyph contact-copy"
+              data-action="copy-address"
+              aria-label="Copy email address"
+              aria-describedby="contact-address"
+            >
+              <ContactIcon name="copy" class="contact-glyph__idle" />
+              <ContactIcon name="check" class="contact-glyph__check" />
+            </button><span class="contact-glyph__word" data-copied>Copied</span>
+          </p>
+          <p class="contact-hint" data-hint="address" hidden></p>
+          <p class="visually-hidden" role="status" data-status></p>
+        </div>
+        <script is:inline set:html={contactDirectScript()} />
+      </div>
+    </PageIntro>
+
+    <section
+      class="band band--orbit contact-templates"
+      aria-labelledby="contact-templates-title"
+    >
+      <div class="section-shell">
+        <div
+          class="contact"
+          id={ROOT}
+          data-topic="contribute"
+          data-offers=""
+          hidden
+        >
+          <h2
+            class="contact-templates__title"
+            id="contact-templates-title"
+            data-font-wait
+          >
+            Or start from a template.
+          </h2>
+
+          <div class="contact__controls">
+            <fieldset class="contact-step" data-step="purpose">
+              <legend class="contact-step__label">
+                <span
+                  class="contact-step__number"
+                  aria-hidden="true"
+                  data-number="1"></span>{' '}What it’s about
+              </legend>
+              <div class="contact-choices">
+                {
+                  TOPICS.map((topic) => (
+                    <label class="contact-choice">
+                      <input
+                        type="radio"
+                        name={TOPIC_INPUT}
+                        value={topic}
+                        checked={topic === 'contribute'}
+                      />
+                      <ContactIcon name={topic} class="contact-choice__icon" />
+                      <span>{TOPIC_LABELS[topic]}</span>
+                    </label>
+                  ))
+                }
+              </div>
+            </fieldset>
+
+            <div class="contact-offers" data-offers-field>
+              <div class="contact-offers__clip">
+                <div
+                  class="contact-step"
+                  role="group"
+                  aria-labelledby="contact-offers-label"
+                  data-select="multiple"
+                  data-step="offers"
+                >
+                  <p class="contact-step__label" id="contact-offers-label">
+                    <span
+                      class="contact-step__number"
+                      aria-hidden="true"
+                      data-number="2"></span>{' '}What you’d offer
+                  </p>
+                  <div class="contact-toggles">
+                    {
+                      OFFERS.map((offer) => (
+                        <button
+                          type="button"
+                          class="contact-toggle"
+                          aria-pressed="false"
+                          data-offer={offer}
+                        >
+                          <span class="contact-toggle__mark">
+                            <ContactIcon name={offer} />
+                          </span>{' '}
+                          {OFFER_LABELS[offer]}
+                        </button>
+                      ))
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="contact-step" data-step="send">
+              <p class="contact-step__label">
+                <span
+                  class="contact-step__number"
+                  aria-hidden="true"
+                  data-number="3"></span>{' '}Send it
+              </p>
+              <button
+                type="button"
+                class="contact-button contact-button--primary"
+                data-action="open"
+              >
+                Open draft in your email app
+                <svg
+                  class="contact-button__arrow"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M4.5 12h14M13.5 6.5 19 12l-5.5 5.5"></path>
+                </svg>
+              </button>
+              <p class="contact-hint" data-hint="draft" hidden></p>
+            </div>
+          </div>
+
+          <ContactLetter />
+        </div>
+        <script is:inline set:html={contactPaintScript(ROOT)} />
+
+        <p class="contact-problem">
+          Found a problem? <a
+            href={ISSUES}
+            target="_blank"
+            rel="noopener noreferrer"
+            >Open a GitHub issue <span aria-hidden="true">↗</span></a
+          >
+        </p>
+      </div>
+    </section>
+  </div>
+</SiteLayout>
+
+<script>
+  import { initContact } from '../components/contact/contact';
+
+  const root = document.getElementById('contact-composer');
+  if (root) initContact(root);
+</script>

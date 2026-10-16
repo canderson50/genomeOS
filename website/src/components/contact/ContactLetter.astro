@@ -1,0 +1,215 @@
+---
+/**
+ * The Contact page's template preview (Contact page spec §4): the draft, set like a letter on a
+ * plate (kit Plate anatomy), live as the visitor chooses. Every word comes from the draft builder
+ * (src/lib/contact-draft.ts), so the letter shown is the letter sent.
+ *
+ * - The server renders every part a draft can have: each purpose's opening and subject, About me,
+ *   the four offer sections and the three purposes' sections. The composer's `data-topic` and
+ *   `data-offers` decide which show (styles/pages/contact.css): a section for a newly pressed offer
+ *   opens, and a released one's words leave at once as it closes, in --dur-ui, or at once under
+ *   reduced motion.
+ * - Only a contribution's opening and subject change words, for its offers; the island and the
+ *   pre-paint script write those two spans (`data-offer-list`, `data-offer-subject`).
+ * - To is the address, served spelled out and joined by the island at the first sign of a person,
+ *   in the spelled-out form's box (contact.css), so nothing moves.
+ * - Its copy button (owner, 2026-10-15: "add a copy icon to the upper right of the rendered
+ *   template") is a glyph in the plate's top-right corner, above the To line, which starts below
+ *   it. It copies the draft's text, as a copy of the whole letter does, and turns into a check with
+ *   "Copied" beside it, at its own size. Where the clipboard is blocked the letter is selected
+ *   instead, and a line at its top says which keys copy it. It is outside the letter's text
+ *   (`[data-letter]`), so neither a selection of the letter nor its typing sees it.
+ * - The stage is a labelled region, read as text and never announced on a change.
+ * - It types itself out the first time it is in view, and retypes only what a choice changes
+ *   (letter-typing.ts). That is display only, and only while it types: at rest the letter is this
+ *   markup as rendered, and without JavaScript, under reduced motion, in forced colours and in
+ *   print it is whole at once.
+ *
+ * Offer sections carry their offer's icon, the one on its toggle (contact-icons.ts). Each field is
+ * its dash, then its label with the dotted leader that ends the label's last line (contact.css),
+ * written as one expression so no space falls between the last word and the leader. The greeting
+ * and the opening, short lines that may wrap once or twice, break evenly (`letter__para--balanced`),
+ * so neither ends on one word. The caption says what the letter leaves implicit: its blanks are the
+ * visitor's to fill (design critique 2, m-7).
+ *
+ * Test hooks: each block of the letter is `[data-letter-block]` and each of its lines
+ * `[data-letter-line]`; the subject is `[data-letter-subject]`; `[data-letter]` is the generated
+ * text, which the word budget leaves out (tests/pages/contact.json).
+ */
+import BrandName from '../BrandName.astro';
+import Plate from '../kit/Plate.astro';
+import ContactIcon from './ContactIcon.astro';
+import { SPELLED_OUT } from './contact-paint';
+import {
+  GREETING,
+  letterList,
+  OFFERS,
+  OPENINGS,
+  SECTIONS,
+  SIGN_OFF,
+  SUBJECTS,
+  TOPICS,
+  type Offer,
+  type SectionId,
+} from '../../lib/contact-draft';
+
+/** Text split around "genomeOS", which is always set in the wordmark type. */
+const brand = (text: string) => text.split(/(genomeOS)/g);
+// The two spans a contribution's offers fill, as markers among the text parts, so each line
+// renders from one list with no stray whitespace between its parts.
+const LIST = Symbol('offer list');
+const SUFFIX = Symbol('offer subject');
+const [openingBefore, openingAfter] = OPENINGS.contribute.split('{offers}');
+const openingParts = (topic: (typeof TOPICS)[number]) =>
+  topic === 'contribute'
+    ? [...brand(openingBefore), LIST, openingAfter]
+    : brand(OPENINGS[topic]);
+const subjectParts = (topic: (typeof TOPICS)[number]) =>
+  topic === 'contribute'
+    ? [...brand(SUBJECTS[topic]), SUFFIX]
+    : brand(SUBJECTS[topic]);
+const sections: { id: SectionId; offer: boolean }[] = [
+  ...OFFERS.map((id) => ({ id, offer: true })),
+  ...TOPICS.filter((topic) => topic !== 'contribute').map((id) => ({
+    id: id as SectionId,
+    offer: false,
+  })),
+];
+---
+
+<Plate
+  graphic="contact-letter"
+  class="contact-letter"
+  region
+  labelledby="contact-letter-title"
+>
+  <button
+    type="button"
+    class="contact-glyph letter-copy"
+    data-action="copy-letter"
+    aria-label="Copy the letter"
+  >
+    <span class="contact-glyph__word">Copied</span>
+    <ContactIcon name="copy" class="contact-glyph__idle" />
+    <ContactIcon name="check" class="contact-glyph__check" />
+  </button>
+  <p class="contact-hint letter-hint" data-hint="letter" hidden></p>
+  <div class="letter" data-letter>
+    <dl class="letter__head">
+      <div class="letter__row">
+        <dt>To</dt>
+        <dd>
+          <span class="letter__address" data-spelled={SPELLED_OUT}
+            ><span data-to-address>{SPELLED_OUT}</span></span
+          >
+        </dd>
+      </div>
+      <div class="letter__row">
+        <dt>Subject</dt>
+        <dd data-letter-subject>
+          {
+            TOPICS.map((topic) => (
+              <span data-for-topic={topic}>
+                {subjectParts(topic).map((part) =>
+                  part === SUFFIX ? (
+                    <span data-offer-subject />
+                  ) : part === 'genomeOS' ? (
+                    <BrandName />
+                  ) : (
+                    part
+                  ),
+                )}
+              </span>
+            ))
+          }
+        </dd>
+      </div>
+    </dl>
+
+    <div class="letter__body">
+      <p class="letter__para letter__para--balanced" data-letter-block>
+        <span class="letter__line" data-letter-line
+          >{
+            brand(GREETING).map((part) =>
+              part === 'genomeOS' ? <BrandName /> : part,
+            )
+          }</span
+        >
+      </p>
+      <p class="letter__para letter__para--balanced" data-letter-block>
+        {
+          TOPICS.map((topic) => (
+            <span class="letter__line" data-letter-line data-for-topic={topic}>
+              {openingParts(topic).map((part) =>
+                part === LIST ? (
+                  <span data-offer-list>{letterList([])}</span>
+                ) : part === 'genomeOS' ? (
+                  <BrandName />
+                ) : (
+                  part
+                ),
+              )}
+            </span>
+          ))
+        }
+      </p>
+      <p class="letter__para" data-letter-block>
+        <span class="letter__line letter__heading" data-letter-line
+          >{SECTIONS.about.heading}</span
+        >
+        {
+          SECTIONS.about.fields.map((field) => (
+            <span class="letter__line letter__field" data-letter-line>
+              <span class="letter__dash">-</span>
+              <span class="letter__label">
+                {[` ${field}`, <span class="letter__leader" />]}
+              </span>
+            </span>
+          ))
+        }
+      </p>
+      {
+        sections.map(({ id, offer }) => (
+          <div
+            class="letter__section"
+            data-section={id}
+            data-offer-section={offer ? '' : undefined}
+          >
+            <div class="letter__clip">
+              <p class="letter__para" data-letter-block>
+                <span class="letter__line letter__heading" data-letter-line>
+                  {offer && (
+                    <ContactIcon name={id as Offer} class="letter__icon" />
+                  )}
+                  {SECTIONS[id].heading}
+                </span>
+                {SECTIONS[id].fields.map((field) => (
+                  <span class="letter__line letter__field" data-letter-line>
+                    <span class="letter__dash">-</span>
+                    <span class="letter__label">
+                      {[` ${field}`, <span class="letter__leader" />]}
+                    </span>
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+        ))
+      }
+      <p class="letter__para" data-letter-block>
+        {
+          SIGN_OFF.map((line) => (
+            <span class="letter__line" data-letter-line>
+              {line}
+            </span>
+          ))
+        }
+      </p>
+    </div>
+  </div>
+
+  <span slot="caption"
+    ><strong id="contact-letter-title">Your draft.</strong> Fill in the blanks before
+    you send it.</span
+  >
+</Plate>

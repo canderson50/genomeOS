@@ -371,7 +371,7 @@ test.describe('opt-in in an EEA, UK or Swiss time zone', () => {
       { name: 'unrelated', value: 'kept', url: baseURL },
     ]);
     const requests = gtagRequests(page);
-    await page.goto('/working-groups/');
+    await page.goto('/contribute/');
     await waitForCookieControl(page);
     await panel(page).getByRole('button', { name: 'Decline' }).click();
     await expect(panel(page)).toBeHidden();
@@ -405,7 +405,7 @@ test.describe('opt-in in an EEA, UK or Swiss time zone', () => {
     await expect(panel(page)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(panel(page)).toBeHidden();
-    await page.goto('/project/');
+    await page.goto('/projects/');
     await waitForCookieControl(page);
     await expect(panel(page)).toBeHidden();
     expect(await storedChoice(page)).toBeNull();
@@ -427,7 +427,7 @@ test.describe('opt-in in an EEA, UK or Swiss time zone', () => {
       });
     const next = await visit.newPage();
     await installAtlasBrowserFixture(next);
-    await next.goto('/project/');
+    await next.goto('/projects/');
     await waitForCookieControl(next);
     await expect(panel(next)).toBeVisible();
     await next.mouse.click(10, 300);

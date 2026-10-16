@@ -1,186 +1,240 @@
 ---
-import Callout from '../components/Callout.astro';
-import ContributionFlow from '../components/ContributionFlow.astro';
+/**
+ * Contribute (site redesign spec §4.3; round 2 spec §4.3, R2-5; #454), which absorbs the Working
+ * groups page:
+ *
+ *   intro             H1 left, lede right (PageIntro split)
+ *   #working-groups   the orbit scene: three working-group moons, crews landing, and each group's
+ *                     text typed below it (the page's lead figure; OrbitScene.astro), the section's
+ *                     kicker and heading leading its top bar
+ *   #flow             how the groups fit together: the transit line
+ *   #how-work-moves   the work board (HowWorkMoves.astro, its own section, CSS and script)
+ *   #start            four places to start, and offers by email (a link row, no figure)
+ *
+ * /working-groups/ redirects here (#working-groups, and #data, #modeling, #ui to the orbit's
+ * columns, #group-data, #group-modeling, #group-ui).
+ */
+import HowWorkMoves from '../components/contribute/HowWorkMoves.astro';
+import Mark from '../components/contribute/Mark.astro';
+import OrbitScene from '../components/contribute/OrbitScene.astro';
+import TransitLine from '../components/contribute/TransitLine.astro';
 import PageIntro from '../components/PageIntro.astro';
-import PageVisual from '../components/PageVisual.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { sitePath } from '../lib/paths';
+import '../styles/pages/contribute.css';
+
+// Data, expertise and funding are offered by email: each link opens the Contact page's draft
+// with that offer pressed (Contact page spec §4, "Links in").
+const offers = ['data', 'expertise', 'funding'] as const;
+
+const starts = [
+  {
+    href: 'https://github.com/genomeOS/genomeOS/discussions/76',
+    kicker: 'Meet the community',
+    title: 'Introduce yourself',
+    primary: true,
+  },
+  {
+    href: 'https://github.com/genomeOS/genomeOS/issues/new/choose',
+    kicker: 'Bring a direction',
+    title: 'Propose an issue',
+  },
+  {
+    href: 'https://github.com/orgs/genomeOS/projects/1',
+    kicker: 'See what is Ready',
+    title: 'Project board',
+  },
+  {
+    href: 'https://github.com/genomeOS/genomeOS/issues/65',
+    kicker: 'How we work',
+    title: 'Community standards',
+  },
+];
 ---
 
 <SiteLayout
   title="Contribute"
-  description="How to join genomeOS, choose Ready work, use GitHub Issues and Projects, and open a reviewable contribution."
+  description="Join a genomeOS working group, take Ready work from the project board, and open a reviewable contribution."
 >
-  <PageIntro
-    note="Open collaboration"
-    title="Find work that fits how you think."
-    lede="The project is organized so a literature researcher, statistician, engineer, designer, clinician, or community partner can find a bounded task and understand why it matters."
-  />
+  {
+    /*
+     * Spec §2.7 rule 5 (round 2 §4.3.2), above the fold never flashes: before any of the page
+     * paints, mark the orbit armed, so it paints its story's first moment (contribute.css: an
+     * empty stage, every column waiting), never its last frame emptying for the story. Only with
+     * motion allowed, colours not forced (spec §8.9: there the scene shows its end state) and the
+     * page arriving within 1,200 ms; if the scene has neither begun loading
+     * (data-orbit-loading, set by the page's script and kept until the scene has a state) nor been
+     * built (data-scene-state) by then, stand down to the last frame. Never for a link to a group's
+     * column (#group-ui, and /working-groups/#ui, which redirects there): the visitor came for
+     * that text, so the columns keep it typed out and the scene rests (orbit.ts).
+     */
+  }
+  <script is:inline slot="head">
+    (function (root) {
+      try {
+        if (
+          matchMedia('(prefers-reduced-motion: reduce)').matches ||
+          matchMedia('(forced-colors: active)').matches ||
+          /^#group-/.test(location.hash) ||
+          performance.now() > 1200
+        )
+          return;
+        root.setAttribute('data-arm-orbit', '');
+        setTimeout(
+          function () {
+            var figure = document.querySelector('[data-graphic="orbit"]');
+            if (
+              !figure ||
+              !(
+                figure.hasAttribute('data-scene-state') ||
+                figure.hasAttribute('data-orbit-loading')
+              )
+            )
+              root.removeAttribute('data-arm-orbit');
+          },
+          Math.max(0, 1200 - performance.now()),
+        );
+      } catch (error) {
+        root.removeAttribute('data-arm-orbit');
+      }
+    })(document.documentElement);
+  </script>
+  <div class="contribute-intro">
+    <PageIntro
+      layout="split"
+      note="Open collaboration"
+      title="Find work that fits how you think."
+      lede="Literature, statistics, engineering, design, clinical and community knowledge all move the Atlas. Every contribution starts with a conversation."
+    />
+  </div>
 
-  <PageVisual
-    image={sitePath('/images/contribute-community.webp')}
-    alt="Contributors around the world bringing research, code, data, design, and discussion into a shared atlas"
-    kicker="Many ways to contribute"
-    title="Bring the perspective the atlas is missing."
-    description="Local knowledge, overlooked literature, scientific critique, modeling, infrastructure, design, and community experience all make the resource more complete and more useful."
-  />
-
-  <ContributionFlow />
-
-  <section class="contribution-detail">
-    <div class="section-shell contribution-detail__grid">
-      <article>
-        <h2>1. Start with people</h2>
-        <p>
-          Introduce yourself in <a
-            href="https://github.com/genomeOS/genomeOS/discussions/76"
-            target="_blank"
-            rel="noopener noreferrer">Discussion #76</a
-          >. Share the disciplines, languages, datasets, places, or product
-          questions you know. You do not need to arrive with a finished
-          proposal.
-        </p>
-      </article>
-      <article>
-        <h2>2. Use issues as the record</h2>
-        <p>
-          Search <a
-            href="https://github.com/genomeOS/genomeOS/issues?q=is%3Aissue"
-            target="_blank"
-            rel="noopener noreferrer">open and closed issues</a
-          >
-          before starting. Open issues are the work queue. Closed issues preserve
-          decisions and house patterns—including ideas deliberately declined.
-        </p>
-        <p>
-          When posting a substantive update, mention the original issue author
-          so the person who framed the work is notified.
-        </p>
-      </article>
-      <article>
-        <h2>3. Read board status literally</h2>
-        <dl class="status-definitions">
-          <div>
-            <dt>Backlog</dt><dd>
-              Logged, but not yet specified for implementation.
-            </dd>
-          </div>
-          <div>
-            <dt>Ready</dt><dd>
-              Fully specified and unblocked; take it without asking.
-            </dd>
-          </div>
-          <div>
-            <dt>In progress</dt><dd>Someone is actively moving the issue.</dd>
-          </div>
-          <div>
-            <dt>In review</dt><dd>
-              A pull request or expert review is underway.
-            </dd>
-          </div>
-          <div>
-            <dt>Blocked</dt><dd>
-              A named dependency or decision prevents progress.
-            </dd>
-          </div>
-        </dl>
-      </article>
-      <article>
-        <h2>4. Filter by four label families</h2>
-        <ul>
-          <li>
-            <code>type:*</code> describes the kind of contribution: data, science,
-            infrastructure, user interface, documentation, governance, or outreach.
-          </li>
-          <li>
-            <code>P*:</code> is the project board’s shorthand for a part of the system:
-            population locations, measured evidence, frequency modeling, disease-burden
-            modeling, the data service, or the interactive map. You do not need to
-            memorize the codes.
-          </li>
-          <li>
-            <code>skill:*</code> helps you find work matching your expertise.
-          </li>
-          <li>
-            <code>priority:*</code> follows the dependency graph—what breaks if work
-            is late—not how exciting it sounds.
-          </li>
-        </ul>
-      </article>
-      <article>
-        <h2>5. Respect decision and review labels</h2>
-        <p>
-          <code>wants-expert-review</code> means implement the issue, then state exactly
-          what a domain expert should check.
-        </p>
-        <p>
-          <code>needs-human-decision</code> means stop at the choice: surface the
-          evidence and options, but do not commit on the project’s behalf.
-        </p>
-      </article>
-      <article>
-        <h2>6. Make the pull request auditable</h2>
-        <p>
-          Connect the scientific objective, acceptance evidence, engineering
-          interface, assumptions, refusal conditions, and downstream users. Link
-          the issue with the correct closing keyword and report every
-          verification run honestly.
-        </p>
-      </article>
+  <section
+    class="band contribute-band wg-section"
+    id="working-groups"
+    data-concept
+    aria-labelledby="working-groups-title"
+  >
+    <div class="section-shell">
+      <OrbitScene labelledby="working-groups-title">
+        <Fragment slot="head">
+          <p class="section-kicker orbit__kicker">Working groups</p>
+          <h2 class="orbit__title" id="working-groups-title">
+            Three groups are forming.
+          </h2>
+        </Fragment>
+      </OrbitScene>
     </div>
   </section>
 
-  <section class="validation-section">
+  <section
+    class="band contribute-band flow-section"
+    id="flow"
+    data-concept
+    aria-labelledby="flow-title"
+  >
     <div class="section-shell">
-      <Callout title="Milestones are release boundaries" tone="aurora">
-        <p>
-          The first milestone establishes the data foundation; the second
-          reproduces published haemoglobin S science; the third makes the map
-          usable; and the fourth makes public launch safe and understandable.
-          Issues belong to both a part of the system and a release milestone
-          because those answer different questions.
-        </p>
-      </Callout>
+      <h2 class="contribute-h2" id="flow-title">
+        How the groups fit together.
+      </h2>
+      <TransitLine />
     </div>
   </section>
 
-  <section class="resource-links">
+  <HowWorkMoves />
+
+  <section
+    class="band contribute-band start-section"
+    id="start"
+    aria-labelledby="start-title"
+  >
     <div class="section-shell">
-      <h2>Open the live workspace</h2>
-      <div class="resource-links__grid">
-        <a
-          href="https://github.com/orgs/genomeOS/projects/1"
-          target="_blank"
-          rel="noopener noreferrer"
-          ><strong>Project board</strong><span
-            >See status, priority, milestones, and ownership.</span
-          ></a
-        >
-        <a
-          href="https://github.com/genomeOS/genomeOS/issues"
-          target="_blank"
-          rel="noopener noreferrer"
-          ><strong>Issues</strong><span
-            >Search decisions and choose a scoped task.</span
-          ></a
-        >
-        <a
-          href="https://github.com/genomeOS/genomeOS/pulls"
-          target="_blank"
-          rel="noopener noreferrer"
-          ><strong>Pull requests</strong><span
-            >Learn from active implementation and review.</span
-          ></a
-        >
-        <a
-          href="https://github.com/genomeOS/genomeOS/issues/65"
-          target="_blank"
-          rel="noopener noreferrer"
-          ><strong>Community standards</strong><span
-            >Follow the contribution-file work tracked in Issue #65.</span
-          ></a
-        >
+      <h2 class="contribute-h2" id="start-title">Start here.</h2>
+      <div class="link-row link-row--four start-links">
+        {
+          starts.map((start) => (
+            <a
+              class:list={[
+                'github-cta',
+                start.primary && 'github-cta--primary',
+              ]}
+              href={start.href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span>{start.kicker}</span>
+              <strong>{start.title}</strong>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))
+        }
       </div>
+      <p class="start-offers">
+        <span class="start-offers__lead">By email</span>
+        {
+          offers.map((offer) => (
+            <a href={sitePath(`/contact/?topic=contribute&offer=${offer}`)}>
+              Offer {offer} <Mark icon="arrow" size={18} />
+            </a>
+          ))
+        }
+      </p>
     </div>
   </section>
 </SiteLayout>
+
+<script>
+  /*
+   * The page's island (spec §7: Contribute ≤ 10 KB of first-party JS at first load): the transit
+   * line's entrance and lane lighting, the orbit's moons as links, and a few lines that import the
+   * orbit scene (orbit.ts, its own lazily loaded chunk, round 2 spec §7) once the figure is within a
+   * viewport of the screen. Under reduced motion or forced colours (spec §8.9) the orbit is never
+   * imported: its server-rendered last frame is the picture, and nothing would move. The work
+   * board's script lives with its section (HowWorkMoves.astro).
+   */
+  import '../components/contribute/transit';
+
+  const orbit = document.querySelector<HTMLElement>('[data-graphic="orbit"]');
+  // A moon, its crew or its label opens its group's issues on GitHub in a new tab, the URL its
+  // column's "Browse matching issues" holds (owner, 2026-10-15). The pointer's shortcut only: the
+  // stage is one image to assistive tech and holds no tab stop, and keyboards and screen readers
+  // reach the same pages by the column links. Here, not in orbit.ts, so it works under reduced
+  // motion too, where the scene never loads.
+  orbit
+    ?.querySelector('[data-figure-stage]')
+    ?.addEventListener('click', (event) => {
+      const kind = (event.target as Element | null)
+        ?.closest('[data-moon]')
+        ?.getAttribute('data-moon');
+      const link = kind
+        ? orbit.querySelector<HTMLAnchorElement>(
+            `.orbit-col[data-group="${kind}"] .orbit-col__link`,
+          )
+        : null;
+      if (link) window.open(link.href, '_blank', 'noopener,noreferrer');
+    });
+  if (
+    orbit &&
+    !matchMedia('(prefers-reduced-motion: reduce)').matches &&
+    !matchMedia('(forced-colors: active)').matches
+  ) {
+    const load = () => {
+      orbit.setAttribute('data-orbit-loading', '');
+      import('../components/contribute/orbit')
+        .then(({ initOrbit }) => initOrbit(orbit))
+        .catch(() => {
+          // Without the scene the last frame stands: never leave the stage armed and empty.
+          document.documentElement.removeAttribute('data-arm-orbit');
+          orbit.removeAttribute('data-orbit-loading');
+        });
+    };
+    const near = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        near.disconnect();
+        load();
+      },
+      { rootMargin: '100% 0px' },
+    );
+    near.observe(orbit);
+  }
+</script>

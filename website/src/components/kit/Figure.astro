@@ -1,0 +1,220 @@
+---
+/**
+ * A data figure (site redesign spec §2.5, §8, §9.2; #454): real data or computed counts, drawn open
+ * on the page with no frame.
+ *
+ *   toolbar   [status tag]                                  [segmented control]
+ *   stage     canvas or SVG, box reserved by `aspect`       callouts in its margins
+ *   readout   one docked strip (Readout.astro); after the legend with `readoutAfterLegend`
+ *   legend    the figcaption: glyph and words, bold lead-in
+ *   footnote  provenance · Open in the Atlas
+ *   table     a collapsed "View as table" twin
+ *
+ * Hooks the cross-page tests read: `figure[data-graphic]` holds exactly one `[data-figure-stage]`,
+ * and every control, legend and readout box carries `data-figure-chrome`. A static stage is
+ * `role="img"` with an accessible name; an interactive one is `role="group"` with native controls
+ * inside. The figure's own name is its figcaption.
+ */
+
+interface Props {
+  /** The figure's name for tests and analytics-free hooks, e.g. "atlas-preview". */
+  graphic: string;
+  /** Accessible name of the stage (static: required, unless `labelledby`). */
+  label?: string;
+  labelledby?: string;
+  describedby?: string;
+  /** The stage holds controls (drag, keys, buttons): role=group instead of role=img. */
+  interactive?: boolean;
+  /** Reserve the stage box, e.g. "4 / 3". */
+  aspect?: string;
+  id?: string;
+  class?: string;
+  tableSummary?: string;
+  /**
+   * Put the readout slot under the legend instead of under the stage: for a figure whose readout
+   * is a note and a call to action, not a reading of the stage, so the key stays beside what it
+   * explains (Home's Atlas preview: globe, key, then the note and the Atlas pill).
+   */
+  readoutAfterLegend?: boolean;
+  /** Hooks such as `data-motion-exception` (round 2 spec §2.3) pass through to the figure. */
+  [key: `data-${string}`]: string | undefined;
+}
+
+const {
+  graphic,
+  label,
+  labelledby,
+  describedby,
+  interactive = false,
+  aspect,
+  id,
+  class: className,
+  tableSummary = 'View as table',
+  readoutAfterLegend = false,
+  ...data
+} = Astro.props;
+// A slot passed inside a false expression still counts as present, so each optional part is drawn
+// only when its slot renders something (as in Plate.astro): no empty chrome bars.
+const render = async (name: string) =>
+  Astro.slots.has(name) ? (await Astro.slots.render(name)).trim() : '';
+const [toolbar, readout, footnote, table] = await Promise.all(
+  ['toolbar', 'readout', 'footnote', 'table'].map(render),
+);
+// The table's box scrolls on its own where the table is wider than its column (a phone), so it is
+// a named, focusable region a keyboard can scroll (WCAG 2.1.1): named by its one caption, or by
+// the summary when the slot holds several tables (one per genotype or layer).
+const captions = [...table.matchAll(/<caption\b[^>]*>([\s\S]*?)<\/caption>/g)];
+const decode = (text: string) =>
+  text
+    .replace(/<[^>]+>/g, '')
+    .replace(/&#(\d+);/g, (_, code: string) =>
+      String.fromCodePoint(Number(code)),
+    )
+    .replace(/&#x([\da-f]+);/gi, (_, code: string) =>
+      String.fromCodePoint(parseInt(code, 16)),
+    )
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+const tableName =
+  captions.length === 1 ? decode(captions[0][1]!) : tableSummary;
+---
+
+<figure
+  class:list={['kit-figure', className]}
+  data-graphic={graphic}
+  data-kind="data"
+  id={id}
+  {...data}
+>
+  {
+    toolbar && (
+      <div class="kit-figure__toolbar" data-figure-chrome>
+        <Fragment set:html={toolbar} />
+      </div>
+    )
+  }
+  <div
+    class="kit-figure__stage"
+    data-figure-stage
+    role={interactive ? 'group' : 'img'}
+    aria-label={label}
+    aria-labelledby={labelledby}
+    aria-describedby={describedby}
+    style={aspect ? `aspect-ratio: ${aspect}` : undefined}
+  >
+    <slot />
+  </div>
+  {readout && !readoutAfterLegend && <Fragment set:html={readout} />}
+  <figcaption class="kit-figure__legend" data-figure-chrome>
+    <slot name="legend" />
+  </figcaption>
+  {readout && readoutAfterLegend && <Fragment set:html={readout} />}
+  {
+    footnote && (
+      <p class="kit-figure__footnote" data-figure-chrome>
+        <Fragment set:html={footnote} />
+      </p>
+    )
+  }
+  {
+    table && (
+      <details class="kit-figure__table" data-figure-chrome>
+        <summary>{tableSummary}</summary>
+        <div
+          class="kit-figure__table-box"
+          role="region"
+          tabindex="0"
+          aria-label={tableName}
+        >
+          <Fragment set:html={table} />
+        </div>
+      </details>
+    )
+  }
+</figure>
+
+<style is:global>
+  .kit-figure {
+    position: relative;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .kit-figure__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .kit-figure__stage {
+    position: relative;
+    min-width: 0;
+  }
+
+  .kit-figure__stage > :is(svg, canvas, img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .kit-figure__legend {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--color-deep-line);
+    color: var(--color-muted);
+    font-size: var(--type-legend);
+    line-height: 1.5;
+  }
+
+  .kit-figure__legend > strong:first-child {
+    color: var(--color-starlight);
+    font-weight: 620;
+  }
+
+  .kit-figure__footnote {
+    margin: 0.75rem 0 0;
+    color: var(--color-faint);
+    font-size: 0.8rem;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 1.5;
+  }
+
+  .kit-figure__table {
+    margin-top: 0.75rem;
+    font-size: var(--type-legend);
+  }
+
+  .kit-figure__table summary {
+    min-height: 24px;
+    color: var(--color-ion);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* A table wider than its column scrolls in this box, never the page: at 320 px the counts
+     figure's five columns ran 73 px past the screen (T7's site-wide overflow check). */
+  .kit-figure__table-box {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .kit-figure__table table {
+    width: 100%;
+    margin-top: 0.6rem;
+    border-collapse: collapse;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .kit-figure__table :is(th, td) {
+    padding: 0.35rem 0.6rem 0.35rem 0;
+    border-bottom: 1px solid var(--color-deep-line);
+    text-align: left;
+  }
+</style>

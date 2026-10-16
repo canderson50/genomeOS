@@ -4,6 +4,7 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import atlasScenePreload from './integrations/atlas-scene-preload.mjs';
+import devKit from './integrations/dev-kit.mjs';
 import { gaHead, gaMeasurementId } from './src/lib/ga.mjs';
 
 import { FAVICON_SVG, rasterIconLinks } from './src/lib/favicons.ts';
@@ -26,6 +27,7 @@ export default defineConfig({
   integrations: [
     react(),
     atlasScenePreload(),
+    devKit(),
     starlight({
       title: 'genomeOS',
       description: 'An open atlas of human genetic variation across geography.',
@@ -34,7 +36,15 @@ export default defineConfig({
       components: {
         EditLink: './src/components/starlight/EditLink.astro',
         Footer: './src/components/starlight/Footer.astro',
+        // #454: the site's lockup, nav and Atlas link around Starlight's search, and dark only.
+        Header: './src/components/starlight/Header.astro',
+        // The site's "Menu +" on the docs phone bar (design critique of the integrated build).
+        MobileMenuToggle: './src/components/starlight/MobileMenuToggle.astro',
+        // Round 2 (spec §4.4): the "Docs" kicker above guide titles; a stub until the Docs task.
+        PageTitle: './src/components/starlight/PageTitle.astro',
         SocialIcons: './src/components/starlight/SocialIcons.astro',
+        ThemeProvider: './src/components/starlight/ThemeProvider.astro',
+        ThemeSelect: './src/components/starlight/ThemeSelect.astro',
       },
       customCss: [
         '@fontsource-variable/figtree',
@@ -81,21 +91,30 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Explore the project',
+          // #454: the site nav for docs readers below 72rem, where the header hides it. No
+          // "genomeOS" in a label: every visible genomeOS is set in the wordmark type. Round 2
+          // (spec §1.1): "Explore the site", and Projects at /projects/.
+          label: 'Explore the site',
           items: [
-            { label: 'Project home', link: '/' },
-            { label: 'Application preview', link: '/app/' },
-            { label: 'Working groups', link: '/working-groups/' },
+            { label: 'Home', link: '/' },
+            { label: 'Atlas', link: '/app/' },
+            { label: 'Projects', link: '/projects/' },
             { label: 'Contribute', link: '/contribute/' },
+            { label: 'Contact', link: '/contact/' },
           ],
         },
         {
-          label: 'Technical docs',
+          label: 'Docs',
           items: [{ autogenerate: { directory: 'docs' } }],
         },
       ],
     }),
-    sitemap(),
+    // /working-groups/ only redirects to /contribute/#working-groups (#454, spec §1.4), and
+    // /project/ to /projects/ (round 2 spec §1.3); /kit/ is the e2e build's test gallery (§3.1).
+    sitemap({
+      filter: (page) =>
+        !/\/(working-groups|project|kit)\/$/.test(new URL(page).pathname),
+    }),
   ],
   vite: {
     envDir: '..',
@@ -120,6 +139,30 @@ export default defineConfig({
                 // from this chunk, so the harness keeps counting Cesium renders as
                 // Cesium (atlas-scene is its only importer).
                 test: /[\\/]node_modules[\\/](?:cesium|@cesium[\\/][^\\/]+)[\\/].*\.js$|[\\/]src[\\/]atlas[\\/]scene[\\/]render-loop\.ts$/,
+              },
+              // The marketing figure kit (site redesign spec §7, #454). Left to automatic
+              // chunking, its modules split by which page imports them, and Project fetched six
+              // kit files of 0.4-4.5 KB, each with its own response headers. Two groups instead:
+              // the motion kit every figure page uses, and the hex-map kit the globe and the HbS
+              // map share. src/graphics/encoding.ts imports nothing from the Atlas at run time
+              // (tests/encoding-tokens.test.ts), so neither group pulls Atlas code in.
+              // The seeded random numbers (rng.ts, a few lines) sit here too: every figure page
+              // has this group from its first load, and the orbit and the board, which need only
+              // mulberry32, would otherwise pull the whole hex kit with them (5 KB gz).
+              {
+                name: 'figure-kit',
+                test: /[\\/]src[\\/]graphics[\\/](?:figure|tween|tabs|rng)\.ts$/,
+              },
+              // The scene kit (round 2 spec §3.1): the timeline, typing, the motion hooks and the
+              // astronauts' pose tracks, one cached file for every scene module (orbit, board, crew,
+              // steps, people).
+              {
+                name: 'scene-kit',
+                test: /[\\/]src[\\/]graphics[\\/](?:timeline|typing|motion-hooks)\.ts$|[\\/]src[\\/]graphics[\\/]astro[\\/]tracks\.ts$/,
+              },
+              {
+                name: 'hex-kit',
+                test: /[\\/]src[\\/]graphics[\\/](?:hexfield|projection|figure-data|encoding)\.ts$|[\\/]src[\\/]data[\\/]figures[\\/]hbs-surveys\.\w+\.bin\?url$/,
               },
             ],
           },
