@@ -1,0 +1,1272 @@
+---
+/**
+ * The figure kit gallery (site redesign plan step 0.12, #454): every primitive in one place for
+ * review, at /kit/ under `astro dev` and in the e2e build only. The underscore keeps Astro's router
+ * from building it; integrations/dev-kit.mjs injects the route in development and when
+ * PUBLIC_MOTION_HOOKS=1 (round 2 spec §3.1, §3.4), so the deployed build neither renders the page
+ * nor bundles its script, styles or data.
+ *
+ * Round 2 adds the astronaut kit's character sheet (cast, all thirty poses, small sizes on the void
+ * and on GitHub's #161b22, props, the rig and its anchors, the accents), the micro astronauts, the
+ * Atlas mark, the figure note, the scene controls and a 4 s test scene for tests/kit.spec.ts.
+ */
+import Figure from '../components/kit/Figure.astro';
+import Glyph from '../components/kit/Glyph.astro';
+import Icon from '../components/kit/Icon.astro';
+import Legend from '../components/kit/Legend.astro';
+import Pipeline from '../components/kit/Pipeline.astro';
+import Plate from '../components/kit/Plate.astro';
+import Readout from '../components/kit/Readout.astro';
+import Segmented from '../components/kit/Segmented.astro';
+import StatusTag from '../components/kit/StatusTag.astro';
+import Tablist from '../components/kit/Tablist.astro';
+import AtlasMark from '../components/kit/AtlasMark.astro';
+import Astronaut from '../components/kit/Astronaut.astro';
+import KitDefs from '../components/kit/KitDefs.astro';
+import SceneControls from '../components/kit/SceneControls.astro';
+import { CAST_IDS, CAST_LABELS, type CastId } from '../graphics/astro/cast';
+import {
+  MICRO_VIEWBOX,
+  microId,
+  microSkins,
+  microSymbols,
+} from '../graphics/astro/micro';
+import { ACCENT, C as INK, SKIN } from '../graphics/astro/palette';
+import { POSES, POSE_NAMES, type PoseName } from '../graphics/astro/poses';
+import {
+  PROP,
+  anchors,
+  astronaut,
+  ghost,
+  solve,
+  stool,
+  workCrate,
+  geom,
+} from '../graphics/astro/rig';
+import {
+  avatar,
+  bubble,
+  cart,
+  chartCard,
+  easel,
+  moon,
+  ore,
+  probe,
+  screen,
+  spaceship,
+  tablet,
+  wall,
+} from '../graphics/astro/props';
+import { GLYPHS, type GlyphName } from '../components/kit/glyphs';
+import { ICON_PATHS, type IconName } from '../components/kit/icons';
+import provenance from '../data/figures/hbs.provenance.json';
+import { jeffreys } from '../graphics/jeffreys';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+
+const glyphs = Object.keys(GLYPHS) as GlyphName[];
+const icons = Object.keys(ICON_PATHS) as IconName[];
+const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+const zero = jeffreys(0, 20);
+const sixtyOne = jeffreys(61, 412);
+const revision = provenance.hf_revision.slice(0, 7);
+
+/* ---- the astronaut kit's character sheet (round 2 spec §3.1) ---- */
+const svg = (w: number, h: number, viewBox: string, inner: string) =>
+  `<svg width="${w}" height="${h}" viewBox="${viewBox}" aria-hidden="true" focusable="false">${inner}</svg>`;
+const one = (id: CastId, pose: PoseName = 'stand') =>
+  svg(
+    110,
+    150,
+    '-55 -132 110 150',
+    `<path d="M-48 0H48" stroke="#1d3a5c"/>${astronaut(id, pose)}`,
+  );
+const HERO: [CastId, PoseName, number, 1 | -1][] = [
+  ['A1', 'wave', 30, 1],
+  ['A6', 'hop', 110, 1],
+  ['A3', 'present', 200, 1],
+  ['E2', 'think', 300, -1],
+  ['E1', 'clipboard', 380, -1],
+  ['A4', 'scroll', 455, 1],
+  ['A5', 'celebrate', 545, -1],
+];
+const hero = `<path d="M-10 0H620" stroke="#1d3a5c"/>${HERO.map(
+  ([id, pose, x, face]) =>
+    `<g transform="translate(${x} 0)">${astronaut(id, pose, { face })}</g>`,
+).join('')}`;
+const standing = astronaut('A1', 'stand');
+const stats: [string | number, string][] = [
+  [1, 'rig, two-bone IK'],
+  [CAST_IDS.length, 'people'],
+  [Object.keys(SKIN).length, 'skin tones'],
+  [4, 'builds'],
+  [POSE_NAMES.length, 'poses'],
+  [(standing.match(/<(?!\/)[a-zA-Z]/g) ?? []).length, 'elements per astronaut'],
+  [`${(standing.length / 1024).toFixed(1)} KB`, 'markup each'],
+];
+// The storyboards' beats first (R2-6), then the rest.
+const POSE_LABELS: [PoseName, CastId, string][] = [
+  ['float', 'A7', 'Float, land'],
+  ['hop', 'A6', 'Hop (low gravity)'],
+  ['walkA', 'A2', 'Walk'],
+  ['walkMid', 'A2', 'Walk: passing'],
+  ['walkB', 'A2', 'Walk: other stride'],
+  ['sit', 'A8', 'Sit'],
+  ['chat', 'A1', 'Chat'],
+  ['scroll', 'A4', 'Scroll a list'],
+  ['idea', 'A3', 'Lightbulb idea'],
+  ['hammerUp', 'A3', 'Hammer: wind-up'],
+  ['hammerHit', 'A3', 'Hammer: strike'],
+  ['inspect', 'A3', 'Inspect'],
+  ['present', 'A3', 'Present (raise a block)'],
+  ['think', 'E2', 'Think (hand on chin)'],
+  ['nod', 'E1', 'Nod'],
+  ['carry', 'E1', 'Carry'],
+  ['fit', 'E1', 'Fit a block'],
+  ['celebrate', 'A5', 'Celebrate (jump)'],
+  ['give', 'A3', 'Hand over'],
+  ['wave', 'A1', 'Wave'],
+  ['point', 'A5', 'Point'],
+  ['listen', 'A2', 'Listen'],
+  ['clipboard', 'E2', 'Clipboard'],
+  ['mineUp', 'A6', 'Mine: wind-up'],
+  ['mineHit', 'A6', 'Mine: strike'],
+  ['push', 'A1', 'Push'],
+  ['probe', 'A5', 'Probe the soil'],
+  ['paint', 'A3', 'Paint'],
+  ['crouch', 'A8', 'Crouch (hop anticipation)'],
+  ['stand', 'A4', 'Stand'],
+];
+const poseCells = POSE_LABELS.map(([pose, id, label]) => {
+  const bulb =
+    pose === 'idea'
+      ? (() => {
+          const [hx, hy] = anchors(id, solve(id, POSES.idea)).headTop;
+          return `<g transform="translate(${hx + 2} ${hy - 22}) scale(.8)">${PROP.lightbulb()}</g>`;
+        })()
+      : '';
+  return {
+    pose,
+    label,
+    art: svg(
+      150,
+      168,
+      '-60 -150 120 165',
+      `<path d="M-54 0H54" stroke="#1d3a5c"/>${astronaut(id, pose)}${bulb}`,
+    ),
+  };
+});
+const SIZES = [96, 56, 40, 32, 24];
+const ladder = (['E1', 'A6', 'A5'] as CastId[]).map((id) => ({
+  id,
+  figures: SIZES.map((px) => ({
+    px,
+    art: svg(
+      Math.round(px * 0.66),
+      px + 4,
+      '-33 -104 66 106',
+      astronaut(id, 'stand', { lod: px < 60 ? 'lite' : 'full' }),
+    ),
+  })),
+  avatar: svg(24, 24, '-12 -12 24 24', avatar(id, 11)),
+}));
+const PROPS: [string, string, string][] = [
+  [
+    svg(200, 150, '-75 -75 150 150', moon(60, 'data')),
+    'Moon: Data',
+    'database; discs light in turn',
+  ],
+  [
+    svg(200, 150, '-75 -75 150 150', moon(60, 'model')),
+    'Moon: Modeling',
+    'posterior and interval; hex cells',
+  ],
+  [
+    svg(200, 150, '-75 -75 150 150', moon(60, 'ui')),
+    'Moon: UI',
+    'a window; the cursor drops a pin',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-110 -150 220 160',
+      `<g transform="translate(-58 0) scale(.62)">${spaceship(['A5'])}</g><g transform="translate(16 0) scale(.62)">${spaceship(['A1', 'A6'])}</g><g transform="translate(86 0) scale(.62)">${spaceship(['A4', 'A2', 'A3'])}</g>`,
+    ),
+    'Pods',
+    '1, 2 or 3 crew; flame, squash, hatch',
+  ],
+  [
+    svg(200, 150, '-30 -120 230 130', wall(6, 4, 20, [3, 1])),
+    'Merge wall',
+    'one socket waits for the block',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-30 -120 230 130',
+      `${wall(6, 4, 20, [3, 1], { lit: true }).replace('class="wall-shine" opacity="0"', 'class="wall-shine" opacity=".55"')}<g transform="translate(79 -59)">${PROP.block(17, true)}</g>`,
+    ),
+    'Merge wall, complete',
+    'blocks light out from the socket',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-70 -90 140 100',
+      `<g transform="translate(-30 0)">${stool(-13)}</g><g transform="translate(-36 0)">${workCrate(geom('A3'), true, false)}</g><g transform="translate(36 -26)">${PROP.block(18, true)}</g>`,
+    ),
+    'Seat, bench, block',
+    'raw and lit',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-70 -70 140 80',
+      `<g transform="translate(-34 0)">${ore()}</g><g transform="translate(34 0)">${cart()}</g>`,
+    ),
+    'Ore and cart',
+    'Data: mining and hauling',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-60 -90 120 100',
+      `<g transform="translate(-26 0)">${probe()}</g><g transform="translate(28 0)">${easel()}</g>`,
+    ),
+    'Probe and easel',
+    'Modeling: the interval narrows',
+  ],
+  [
+    svg(200, 150, '-50 -100 100 110', screen()),
+    'Screen',
+    'UI: tiles fill, a stroke, a pin',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-95 -60 190 80',
+      [
+        bubble(-48, 0, 'Approved!', { tail: 'l' }),
+        bubble(40, 0, 'dots'),
+        bubble(-60, 46, 'heart'),
+        bubble(-8, 46, 'check'),
+        bubble(44, 46, 'q'),
+      ].join(''),
+    ),
+    'Speech bubbles',
+    'text 13 px or more; tails point at a helmet',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-60 -110 120 120',
+      `<g transform="translate(-26 -50)">${PROP.lightbulb()}</g><g transform="translate(26 0)">${ghost()}</g>`,
+    ),
+    'Bulb, "Your spot"',
+    'the dashed genome outline is Home’s empty place',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-60 -40 120 60',
+      `<g transform="translate(-28 -8) scale(1.6)">${tablet('</>')}</g><g transform="translate(28 -8) scale(1.6)">${chartCard()}</g>`,
+    ),
+    'Tablet, chart card',
+    'Home’s coder and data person',
+  ],
+  [
+    svg(
+      200,
+      150,
+      '-100 -132 200 150',
+      `<path d="M-90 0H90" stroke="#1d3a5c"/><g transform="translate(-45 0)">${astronaut('A2', 'scroll', { tabletGlyph: '</>' })}</g><g transform="translate(45 0)">${astronaut('A4', 'present', { held: chartCard() })}</g>`,
+    ),
+    'Held',
+    'scroll with </>, present a chart',
+  ],
+];
+// The rig, with its anchors.
+const rigPose = solve('A3', POSES.present);
+const rigAnchors = anchors('A3', rigPose);
+const dot = ([x, y]: [number, number], fill: string) =>
+  `<circle cx="${x}" cy="${y}" r="3.2" fill="${fill}" stroke="#020712" stroke-width="1.2"/>`;
+const rig = svg(
+  420,
+  380,
+  '-70 -150 170 170',
+  `<path d="M-60 0H90" stroke="#1d3a5c"/>${astronaut('A3', 'present')}${dot(rigAnchors.handN, '#70e6ff')}${dot(rigAnchors.handF, '#70e6ff')}${dot(rigAnchors.headTop, '#f2f8ff')}${dot(rigAnchors.block!, '#ff8fb1')}` +
+    `<g font-size="7" fill="#a5b9d3"><text x="34" y="-78">block</text><text x="-52" y="-86">headTop</text><text x="22" y="-56">handN</text><text x="-58" y="-38">handF</text></g>`,
+);
+// Accents against the status colours (OKLab ΔE, tests/astro-kit.test.ts holds the rule).
+const ACCENTS: [string, string, string][] = [
+  ['coral', ACCENT.coral[0], 'patches, knee pads, fins, flame'],
+  ['pink', ACCENT.pink[0], 'patches, the painter’s brush and stroke'],
+  ['royal', ACCENT.royal[0], 'patches, belts, cuffs'],
+  ['slate', ACCENT.slate[0], 'quiet accent (the headscarf suit)'],
+  ['bulb', INK.bulb, 'the idea bulb (pale cream, not gold)'],
+];
+/* ---- micro astronauts (round 2 spec §3.3) ---- */
+const microStates = [
+  ...(['carrier', 'tested'] as const).flatMap((state) =>
+    (Object.keys(SKIN) as (keyof typeof SKIN)[]).map((skin) =>
+      microId(state, skin),
+    ),
+  ),
+  microId('tested'),
+  microId('other'),
+  microId('carrier'),
+  microId('untested'),
+];
+const sample = (() => {
+  // 58 carriers among 206 tested (the counts figure's survey 1), on a 40-column grid.
+  const skins = microSkins(240);
+  const carriers = new Set(
+    Array.from({ length: 58 }, (_, index) => (index * 37 + 11) % 206),
+  );
+  return skins
+    .map((skin, i) => {
+      const id =
+        i >= 206
+          ? microId('untested')
+          : microId(carriers.has(i) ? 'carrier' : 'tested', skin);
+      return `<use href="#${id}" x="${(i % 40) * 20}" y="${Math.floor(i / 40) * 24}" width="16" height="20"/>`;
+    })
+    .join('');
+})();
+---
+
+<SiteLayout
+  title="Figure kit"
+  description="Development gallery of the site figure kit."
+  noindex
+>
+  <Glyph sprite />
+  <Icon sprite />
+  <KitDefs sprite moons />
+  <svg
+    class="devkit-micro-sprite"
+    width="0"
+    height="0"
+    aria-hidden="true"
+    focusable="false"
+    style="position:absolute;width:0;height:0;overflow:hidden"
+    set:html={`<defs>${microSymbols('all')}</defs>`}
+  />
+
+  <section class="page-intro page-intro--split">
+    <div class="section-shell page-intro__inner">
+      <div class="page-intro__head">
+        <p class="page-intro__note">Development only</p>
+        <h1>Figure kit</h1>
+      </div>
+      <p class="page-intro__lede">
+        Every primitive the page tasks build from: glyphs, icons, status tags,
+        figure and plate anatomy, controls, the Pipeline and the hex field; and
+        the astronaut kit, the micro astronauts, the Atlas mark and the scene
+        controls.
+      </p>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-crew" id="astronauts">
+    <div class="section-shell devkit devkit-crew">
+      <div>
+        <p class="section-kicker">Astronaut kit</p>
+        <h2 id="kit-crew">One crew for every page.</h2>
+        <ul class="devkit-stats">
+          {
+            stats.map(([value, label]) => (
+              <li>
+                <b>{value}</b> {label}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div class="devkit-crew__hero">
+        <Fragment
+          set:html={`<svg viewBox="-20 -150 640 175" aria-hidden="true" focusable="false" style="width:100%;height:auto">${hero}</svg>`}
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--orbit" aria-labelledby="kit-cast">
+    <div class="section-shell devkit">
+      <h2 id="kit-cast">Cast: eight contributors, three experts</h2>
+      <p class="devkit-note">
+        Labels describe the drawing, never an identity. Six skin tones, ten hair
+        styles, four builds; the experts wear long coats over dark undersuits.
+      </p>
+      <div class="devkit-grid devkit-grid--cast" data-kit-cast>
+        {
+          CAST_IDS.map((id) => (
+            <div class="devkit-cell" data-cast-cell={id}>
+              <Fragment set:html={one(id)} />
+              <span class="devkit-cell__label">{id}</span>
+              <span class="devkit-cell__note">{CAST_LABELS[id]}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-poses">
+    <div class="section-shell devkit">
+      <h2 id="kit-poses">Poses: every beat the storyboards need</h2>
+      <p class="devkit-note">
+        Each pose is a record of joint angles or hand targets; two-bone IK fits
+        it to every build. Raised hands go beside the visor, never across the
+        face; hammers and picks ride the far hand.
+      </p>
+      <div class="devkit-grid devkit-grid--poses" data-kit-poses>
+        {
+          poseCells.map(({ pose, label, art }) => (
+            <div class="devkit-cell" data-pose-cell={pose}>
+              <Fragment set:html={art} />
+              <span class="devkit-cell__label">{label}</span>
+              <span class="devkit-cell__note">{pose}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--orbit" aria-labelledby="kit-sizes">
+    <div class="section-shell devkit">
+      <h2 id="kit-sizes">Small sizes: where a face still reads</h2>
+      <p class="devkit-note">
+        96, 56, 40, 32 and 24 px, deepest tone first. Below 40 px the scenes use
+        a close-up camera or the helmet-only avatar.
+      </p>
+      <div class="devkit-ladder">
+        {
+          [
+            ['void', 'On the site (void #020712)'],
+            ['gh', 'On GitHub panels (#161b22)'],
+          ].map(([ground, title]) => (
+            <div
+              class={`devkit-ladder__ground devkit-ladder__ground--${ground}`}
+            >
+              <h3>{title}</h3>
+              {ladder.map(({ figures, avatar: face }) => (
+                <div class="devkit-ladder__row">
+                  {figures.map(({ px, art }) => (
+                    <figure>
+                      <Fragment set:html={art} />
+                      <figcaption>{px}</figcaption>
+                    </figure>
+                  ))}
+                  <figure>
+                    <Fragment set:html={face} />
+                    <figcaption>avatar</figcaption>
+                  </figure>
+                </div>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-props">
+    <div class="section-shell devkit">
+      <h2 id="kit-props">Props: things to land on, build and fix</h2>
+      <div class="devkit-grid devkit-grid--props">
+        {
+          PROPS.map(([art, label, note]) => (
+            <div class="devkit-cell">
+              <Fragment set:html={art} />
+              <span class="devkit-cell__label">{label}</span>
+              <span class="devkit-cell__note">{note}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--orbit" aria-labelledby="kit-rig">
+    <div class="section-shell devkit devkit-two">
+      <div>
+        <h2 id="kit-rig">The rig and its anchors</h2>
+        <p class="devkit-note">
+          Every joint is a fixed placement around a rotation, so a pose is a set
+          of rotate() values. anchors() runs the chain forward to find the
+          hands, the helmet top and a held block (the dots): bubbles point at
+          their speaker, and a block passes hand to hand at one point.
+        </p>
+        <Fragment set:html={rig} />
+      </div>
+      <table class="devkit-accents">
+        <caption>Accents: small areas only, never a status colour</caption>
+        <thead>
+          <tr><th>Accent</th><th>Use</th></tr>
+        </thead>
+        <tbody>
+          {
+            ACCENTS.map(([name, hex, use]) => (
+              <tr>
+                <td>
+                  <span class="devkit-swatch" style={`background:${hex}`} />
+                  {name} <span class="devkit-cell__note">{hex}</span>
+                </td>
+                <td>{use}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-micro">
+    <div class="section-shell devkit">
+      <h2 id="kit-micro">Micro astronauts: people in data figures</h2>
+      <p class="devkit-note">
+        One 16 × 20 symbol per state, placed with use. Faces (the counts figure)
+        show the six skin tones; closed visors (the people figure) show none, so
+        ancestry is never drawn as skin colour. The suit carries the data, in
+        the person tokens only.
+      </p>
+      <ul class="devkit-micro" data-kit-micro>
+        {
+          microStates.map((id) => (
+            <li>
+              <svg
+                viewBox={MICRO_VIEWBOX}
+                width="32"
+                height="40"
+                aria-hidden="true"
+              >
+                <use href={`#${id}`} />
+              </svg>
+              <span>{id.replace('micro-', '')}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <Fragment
+        set:html={`<svg class="devkit-micro-grid" viewBox="0 0 800 144" aria-hidden="true" focusable="false">${sample}</svg>`}
+      />
+    </div>
+  </section>
+
+  <section class="band band--orbit" aria-labelledby="kit-mark">
+    <div class="section-shell devkit">
+      <h2 id="kit-mark">The Atlas mark, and a figure note</h2>
+      <div class="devkit-row devkit-marks">
+        <AtlasMark size="8.5rem" idPrefix="kit-mark-a" />
+        <AtlasMark size="3.4rem" idPrefix="kit-mark-b" />
+        <AtlasMark size="13rem" variant="stage" idPrefix="kit-mark-c" />
+      </div>
+      <div class="figure-note" data-figure-chrome>
+        <p>Simplified from the Atlas’s HbS data.</p>
+        <a href={sitePath('/app/?entity=hbs-rs334&palette=genome')}
+          >See it live in the Atlas →</a
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-scene-title">
+    <div class="section-shell devkit">
+      <h2 id="kit-scene-title">Test scene: a 2 s story, then 2 s loops</h2>
+      <Plate
+        graphic="kit-scene"
+        labelledby="kit-scene-title"
+        interactive
+        class="devkit-scene"
+      >
+        <Fragment slot="top">
+          <span class="devkit-note">One hop across, then hops in place.</span>
+          <SceneControls object="the test animation" replay />
+        </Fragment>
+        <svg
+          class="devkit-scene__svg"
+          viewBox="-40 -150 320 170"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M-30 0H270" stroke="#1d3a5c"></path>
+          <!-- The server draws the story's end: standing 160 units across. -->
+          <Astronaut
+            cast="A3"
+            pose="stand"
+            id="kit-hopper"
+            options={{ x: 160 }}
+          />
+        </svg>
+        <Fragment slot="caption">The test scene for tests/kit.spec.ts.</Fragment
+        >
+      </Plate>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-glyphs">
+    <div class="section-shell devkit">
+      <h2 id="kit-glyphs">Glyphs and icons</h2>
+      <ul class="devkit-swatches">
+        {
+          glyphs.map((name) => (
+            <li>
+              <Glyph name={name} size={24} />
+              <span>{name}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <ul class="devkit-swatches">
+        {
+          icons.map((name) => (
+            <li>
+              <Icon name={name} />
+              <span>{name}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="devkit-row">
+        <StatusTag kind="worked-example" />
+      </p>
+    </div>
+  </section>
+
+  <section class="band band--orbit" aria-labelledby="kit-figure">
+    <div class="section-shell devkit">
+      <h2 id="kit-figure">Data figure: the hex field on real HbS data</h2>
+      <Figure
+        graphic="devkit-hexfield"
+        interactive
+        label="300 coarsened HbS areas around 35°N 45°E, from survey-dense to no estimate, with the measured surveys among them"
+        aspect="4 / 3"
+        class="devkit-hexfield"
+      >
+        <Fragment slot="toolbar">
+          <Segmented
+            label="Layer"
+            items={[
+              { value: 'measured', label: 'Measured' },
+              { value: 'modeled', label: 'Modeled' },
+              { value: 'evidence', label: 'Evidence' },
+            ]}
+            selected="modeled"
+            data-devkit-layer=""
+          />
+        </Fragment>
+        <canvas data-devkit-canvas aria-hidden="true"></canvas>
+        <Readout slot="readout" idle="Point at an area or a survey." />
+        <Fragment slot="legend">
+          <strong>Survey and model, kept apart.</strong>
+          <Legend
+            items={[
+              { glyph: 'stud-sm', label: 'Survey, under 200 alleles' },
+              { glyph: 'stud-md', label: '200–1,999' },
+              { glyph: 'stud-lg', label: '2,000 or more' },
+              {
+                glyph: 'vsup-wedge',
+                label: 'Modeled frequency, fading from surveys',
+              },
+              { glyph: 'hatch', label: 'No estimate' },
+            ]}
+          />
+        </Fragment>
+        <Fragment slot="footnote">
+          {provenance.label} · model {provenance.model_version} · data {
+            provenance.data_version
+          } · revision {revision} · coarsened for display ·{' '}
+          <a href={sitePath('/app/?entity=hbs-rs334&palette=genome')}
+            >Open in the Atlas</a
+          >
+        </Fragment>
+        <table slot="table">
+          <thead>
+            <tr><th>Counts</th><th>Jeffreys 95%</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0 of 20</td><td>{pct(zero.lo)}–{pct(zero.hi)}</td></tr>
+            <tr>
+              <td>61 of 412</td><td>{pct(sixtyOne.lo)}–{pct(sixtyOne.hi)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </Figure>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="kit-plate">
+    <div class="section-shell devkit">
+      <h2 id="kit-plate">Mechanism plate and controls</h2>
+      <Plate graphic="devkit-plate" label="An empty plate" interactive>
+        <Fragment slot="top">
+          <Segmented
+            label="Example"
+            items={[
+              { value: 'a', label: 'First' },
+              { value: 'b', label: 'Second' },
+            ]}
+          />
+          <button
+            class="kit-scene-control"
+            type="button"
+            style="margin-left:auto"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path
+                d="M10 3.4a6.6 6.6 0 1 1-6.43 8.08l1.95-.45A4.6 4.6 0 1 0 10 5.4H8.6v2.3L4.4 4.4 8.6 1.1v2.3z"
+              ></path>
+            </svg>
+            <span class="visually-hidden">Replay the example</span>
+          </button>
+        </Fragment>
+        <div class="devkit-plate-stage"></div>
+        <Fragment slot="caption"
+          >One caption line for the focused part.</Fragment
+        >
+      </Plate>
+      <Tablist
+        label="Example steps"
+        idPrefix="devkit-tabs"
+        tabs={[
+          { id: 'one', label: '1 Say hello' },
+          { id: 'two', label: '2 Read the record', sub: 'Backlog' },
+          { id: 'three', label: '3 Take Ready work' },
+        ]}
+      >
+        <p slot="panel-one">The first panel.</p>
+        <p slot="panel-two">The second panel.</p>
+        <p slot="panel-three">The third panel.</p>
+      </Tablist>
+    </div>
+  </section>
+
+  <section class="band band--orbit" aria-labelledby="kit-pipeline">
+    <div class="section-shell devkit">
+      <h2 id="kit-pipeline">Pipeline</h2>
+      <p class="devkit-note">
+        The layout follows the plate's width: horizontal from a 1,000 px stage,
+        stage columns from 520 px, vertical below.
+      </p>
+      <h3>Mode 3, no toggle (Home)</h3>
+      <Pipeline
+        mode={3}
+        modeToggle={false}
+        idPrefix="kit-home"
+        graphic="pipeline-home"
+      />
+      <h3>Mode 6 with the toggle, no brackets (Project)</h3>
+      <Pipeline
+        mode={6}
+        stageBrackets={false}
+        idPrefix="kit-project"
+        graphic="pipeline-project"
+      />
+      <h3>Links, mode 6, in a Docs-width column</h3>
+      <div class="devkit-docs-column">
+        <Pipeline variant="links" idPrefix="kit-docs" graphic="pipeline-docs">
+          <span slot="caption">
+            <strong>The pipeline, with a guide for each part.</strong> Safeguards
+            apply to every part.
+          </span>
+        </Pipeline>
+      </div>
+      <h3>Stage columns with the toggle, in a tablet-width column</h3>
+      <div class="devkit-tablet">
+        <Pipeline mode={6} idPrefix="kit-columns" graphic="pipeline-columns" />
+      </div>
+      <h3>Vertical form in a narrow column</h3>
+      <div class="devkit-narrow">
+        <Pipeline
+          mode={6}
+          idPrefix="kit-vertical"
+          graphic="pipeline-vertical"
+        />
+      </div>
+      <h3>Horizontal form, scrolled at narrow widths</h3>
+      <div class="devkit-wide">
+        <Pipeline
+          mode={3}
+          modeToggle={false}
+          idPrefix="kit-horizontal"
+          graphic="pipeline-horizontal"
+        />
+      </div>
+    </div>
+  </section>
+</SiteLayout>
+
+<script>
+  import { hopKeys, poseTracks, type PoseKey } from '../graphics/astro/tracks';
+  import { sceneController } from '../graphics/timeline';
+
+  /*
+   * The test scene (tests/kit.spec.ts): A3 hops 160 units to the right in the 2 s story, then hops
+   * in place in every 2 s loop. Pose keys carry x by the hop's travel.
+   */
+  const withTravel = (keys: PoseKey[], travel: [number, number][]): PoseKey[] =>
+    keys.map(([t, key, easing]) => {
+      const spec = typeof key === 'string' ? { pose: key } : key;
+      let x = travel[0][1];
+      for (let i = 1; i < travel.length; i++) {
+        const [t0, x0] = travel[i - 1];
+        const [t1, x1] = travel[i];
+        if (t >= t1) x = x1;
+        else if (t > t0) x = x0 + ((x1 - x0) * (t - t0)) / (t1 - t0);
+      }
+      return [t, { ...spec, x }, easing];
+    });
+  const sceneFigure = document.querySelector<HTMLElement>(
+    '[data-graphic="kit-scene"]',
+  );
+  const hopper = sceneFigure?.querySelector('#kit-hopper .astro');
+  if (sceneFigure && hopper)
+    sceneController(
+      sceneFigure,
+      (tl) => {
+        const across = hopKeys(0, 0, 160, { dur: 900 });
+        poseTracks(tl, 'story', hopper, 'A3', [
+          ...withTravel(across.keys, across.travel),
+          [2000, { pose: 'stand', x: 160 }],
+        ]);
+        const inPlace = hopKeys(300, 160, 160, { dur: 700, height: -18 });
+        poseTracks(tl, 'loop', hopper, 'A3', [
+          [0, { pose: 'stand', x: 160 }],
+          ...withTravel(inPlace.keys, inPlace.travel),
+          [2000, { pose: 'stand', x: 160 }],
+        ]);
+      },
+      {
+        name: 'kit-scene',
+        timeline: { story: 2000, loop: 2000 },
+        controls: {
+          toggle: sceneFigure.querySelector<HTMLButtonElement>(
+            '[data-scene-toggle]',
+          ),
+          replay: sceneFigure.querySelector<HTMLButtonElement>(
+            '[data-scene-replay]',
+          ),
+        },
+      },
+    );
+</script>
+
+<script>
+  import { decodeAreas, decodeSurveys } from '../graphics/figure-data';
+  import { FigureController, createAnnouncer } from '../graphics/figure';
+  import { HexField, type HexHit, type HexLayer } from '../graphics/hexfield';
+  import { haversineKm, orthographic } from '../graphics/projection';
+  import { tween, easeUi } from '../graphics/tween';
+  import provenance from '../data/figures/hbs.provenance.json';
+
+  const urls = import.meta.glob('../data/figures/hbs-*.bin', {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+  const url = (prefix: string) =>
+    Object.entries(urls).find(([path]) => path.includes(`/${prefix}.`))![1];
+
+  async function hexfieldDemo(
+    figure: HTMLElement,
+    canvas: HTMLCanvasElement,
+    readout: HTMLElement,
+  ) {
+    const [globe, surveys] = await Promise.all([
+      fetch(url('hbs-globe')).then((response) => response.arrayBuffer()),
+      fetch(url('hbs-surveys')).then((response) => response.arrayBuffer()),
+    ]);
+    // A window that holds every evidence tier and some areas with no estimate.
+    const centre: [number, number] = [45, 35];
+    const areas = decodeAreas(globe)
+      .map((area) => ({ area, km: haversineKm(centre, area.center) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 300)
+      .map(({ area }) => area);
+    const reach = Math.max(
+      ...areas.map((area) => haversineKm(centre, area.center)),
+    );
+    const field = new HexField(canvas, {
+      areas,
+      surveys: decodeSurveys(surveys).filter(
+        (survey) => haversineKm(centre, [survey.lon, survey.lat]) <= reach,
+      ),
+      projection: orthographic({ center: centre, scale: 1, translate: [0, 0] }),
+      domain: provenance.metric_domain.post_mean as [number, number],
+      fit(width, height, projection) {
+        // The whole window on the disc: its farthest area centre plus about one res-2 cell.
+        const angle = (reach + 200) / 6371;
+        projection.scale =
+          (Math.min(width, height) / 2 / Math.sin(angle)) * 0.96;
+        projection.translate = [width / 2, height / 2];
+      },
+    });
+    new ResizeObserver(() => field.resize()).observe(canvas);
+
+    const announce = createAnnouncer(readout);
+    const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+    const describe = (hit: HexHit | null) => {
+      if (!hit) return 'Point at an area or a survey.';
+      if (hit.type === 'surveys') {
+        const [first] = hit.surveys;
+        return hit.surveys.length > 1
+          ? `${hit.surveys.length} surveys here · ${hit.surveys
+              .slice(0, 2)
+              .map((survey) => `${survey.ac} of ${survey.an}`)
+              .join(' · ')}`
+          : `Measured survey · ${first.ac} of ${first.an} alleles carry HbS · within ±${first.radiusKm} km`;
+      }
+      const { area } = hit;
+      if (area.mean === null) return 'No estimate · — · no survey in range';
+      return `Modeled estimate about ${pct(area.mean)} · 95% range ${pct(area.lo!)}–${pct(area.hi!)} · nearest survey about ${area.distanceKm} km`;
+    };
+    canvas.addEventListener('pointermove', (event) => {
+      const box = canvas.getBoundingClientRect();
+      field.hover = field.hit(
+        event.clientX - box.left,
+        event.clientY - box.top,
+      );
+      field.draw();
+      announce(describe(field.hover));
+    });
+
+    const controller = new FigureController(figure, {
+      duration: 2800,
+      arm() {
+        field.reveal = { land: 0, studs: 0, surface: 0, hatch: 0 };
+        field.draw();
+      },
+      render(t) {
+        const clamp = (value: number) => Math.min(1, Math.max(0, value));
+        field.reveal = {
+          land: clamp(t / 300),
+          studs: clamp((t - 300) / 700),
+          surface: clamp((t - 1000) / 1400),
+          hatch: clamp((t - 2400) / 400),
+        };
+        field.draw();
+      },
+      rest() {
+        field.reveal = { land: 1, studs: 1, surface: 1, hatch: 1 };
+        field.draw();
+      },
+    });
+    figure.addEventListener('segmented:change', (event) => {
+      const layer = (event as CustomEvent<{ value: HexLayer }>).detail.value;
+      if (controller.reduced) {
+        field.setLayer(layer);
+        return;
+      }
+      field.setLayer(layer, 0);
+      tween(240, (amount) => field.setLayer(layer, amount), easeUi);
+    });
+  }
+
+  const figure = document.querySelector<HTMLElement>('.devkit-hexfield');
+  const canvas = figure?.querySelector<HTMLCanvasElement>(
+    '[data-devkit-canvas]',
+  );
+  const readout = figure?.querySelector<HTMLElement>('[data-readout]');
+  if (figure && canvas && readout) void hexfieldDemo(figure, canvas, readout);
+</script>
+
+<style>
+  .devkit {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .devkit h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--type-h2);
+    font-weight: 400;
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+  }
+
+  .devkit h3 {
+    margin: 1rem 0 0;
+    font-family: var(--font-display);
+    font-size: var(--type-h3);
+    font-weight: 500;
+  }
+
+  .devkit-swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.75rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--color-text-soft);
+    font-size: 0.86rem;
+  }
+
+  .devkit-swatches li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 2.75rem;
+    color: var(--color-starlight);
+  }
+
+  .devkit-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 0;
+  }
+
+  .devkit-plate-stage {
+    min-height: 8rem;
+  }
+
+  .devkit-note {
+    margin: 0;
+    color: var(--color-text-soft);
+  }
+
+  /* Starlight's content column at a 1440 px viewport. */
+  .devkit-docs-column {
+    width: 100%;
+    max-width: 711px;
+  }
+
+  .devkit-tablet {
+    width: 100%;
+    max-width: 740px;
+  }
+
+  .devkit-narrow {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  /* A stage of at least 1,000 px, scrolled sideways on narrow screens. */
+  .devkit-wide {
+    overflow-x: auto;
+  }
+
+  .devkit-wide > :global(.kit-pipeline) {
+    min-width: 1080px;
+  }
+
+  /* ---- the astronaut kit ---- */
+  .devkit-crew {
+    align-items: center;
+  }
+
+  @media (min-width: 60rem) {
+    .devkit-crew {
+      grid-template-columns: 5fr 7fr;
+    }
+  }
+
+  .devkit-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+  }
+
+  .devkit-stats b {
+    color: var(--color-starlight);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .devkit-grid {
+    display: grid;
+    border: 1px solid var(--color-line);
+    background: var(--color-plate);
+  }
+
+  .devkit-grid > * {
+    min-width: 0;
+    padding: 0.75rem 0.75rem 0.9rem;
+    border-right: 1px solid var(--color-deep-line);
+    border-bottom: 1px solid var(--color-deep-line);
+  }
+
+  .devkit-grid--cast {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  }
+
+  @media (min-width: 75rem) {
+    .devkit-grid--cast {
+      grid-template-columns: repeat(11, minmax(0, 1fr));
+    }
+  }
+
+  .devkit-grid--poses {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .devkit-grid--props {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .devkit-cell :global(svg) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto 0.4rem;
+    overflow: visible;
+  }
+
+  .devkit-cell__label {
+    display: block;
+    color: var(--color-starlight);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .devkit-cell__note {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--color-faint);
+    font-size: 0.8rem;
+  }
+
+  .devkit-ladder {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid var(--color-line);
+  }
+
+  @media (max-width: 40rem) {
+    .devkit-ladder {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .devkit-ladder__ground {
+    padding: 1rem;
+  }
+
+  .devkit-ladder__ground--void {
+    background: #020712;
+  }
+
+  .devkit-ladder__ground--gh {
+    background: #161b22;
+  }
+
+  .devkit-ladder__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.9rem;
+  }
+
+  .devkit-ladder__row figure {
+    margin: 0;
+    color: var(--color-faint);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .devkit-ladder__ground--gh figure {
+    color: #7d8590;
+  }
+
+  .devkit-ladder__row :global(svg) {
+    display: block;
+    overflow: visible;
+  }
+
+  .devkit-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (min-width: 56rem) {
+    .devkit-two {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    }
+  }
+
+  .devkit-two :global(svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .devkit-accents {
+    width: 100%;
+    border-collapse: collapse;
+    align-self: start;
+    font-size: 0.86rem;
+  }
+
+  .devkit-accents caption {
+    margin-bottom: 0.6rem;
+    color: var(--color-muted);
+    text-align: left;
+  }
+
+  .devkit-accents :is(th, td) {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid var(--color-deep-line);
+    text-align: left;
+  }
+
+  .devkit-swatch {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-right: 0.45rem;
+    vertical-align: -0.2rem;
+  }
+
+  .devkit-micro {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--color-faint);
+    font-size: 0.8rem;
+  }
+
+  .devkit-micro li {
+    display: grid;
+    justify-items: center;
+    gap: 0.2rem;
+  }
+
+  .devkit-micro-grid {
+    display: block;
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+  }
+
+  .devkit-marks {
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .devkit-scene__svg {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    margin: 0 auto;
+    overflow: visible;
+  }
+</style>

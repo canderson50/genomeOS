@@ -1,0 +1,394 @@
+---
+/**
+ * The genomeOS Atlas preview: Home's toy globe (site redesign spec §4.1, §2.5, §5, §6.1; round 2
+ * spec §4.1.5; rulings R2-2, R2-14, R2-16 and 22–25 of the round-2 build; #454). The real HbS
+ * (rs334) v3 surface, coarsened for display, with all 1,071 measured surveys as studs. A simplified
+ * preview made from a sample of real Atlas data, not the live Atlas: a plain note says so beside
+ * the pill to the Atlas itself.
+ *
+ * Server-rendered at rest so the figure is complete without JavaScript: the Modeled layer as a
+ * build-time poster, and three labels drawn on the globe, each beside its own point (a ring) on a
+ * side chosen here so it fits the smallest disc. atlas-preview.ts swaps in the live canvas, which
+ * turns slowly by itself; the labels then ride with their points, fade as the points turn away and
+ * come back with them (ruling 23).
+ *
+ *   labels   an aria-hidden SVG over the globe (ruling 25: text that fades is never read as text),
+ *            twinned by a visually hidden list that always holds every label's words
+ *   wide     from a 36rem figure (a container query): a 3:2 stage, the disc centred
+ *   compact  a square globe
+ *
+ * Controls: one Measured · Modeled toggle, and the kit's Pause glyph for the rotation (WCAG 2.2.2:
+ * it moves for more than 5 s; ruling 22), shown only while the globe can turn, in the toggle's row
+ * right after it (design critique 3). Its markup is the kit's SceneControls with the preview's own
+ * hook (`data-spin-toggle`), which motion.spec reads.
+ *
+ * Order (design critique 3): the globe, its key, then the note and the Atlas pill, then the
+ * provenance and the table, so the call to action never stands between the globe and its key.
+ */
+import Figure from '../kit/Figure.astro';
+import Glyph from '../kit/Glyph.astro';
+import Segmented from '../kit/Segmented.astro';
+import provenance from '../../data/figures/hbs.provenance.json';
+import { sitePath } from '../../lib/paths';
+import {
+  DISC_PAD,
+  LABEL_GEOMETRY,
+  LABEL_MIN_RADIUS,
+  estimateLabelWidth,
+  formatKm,
+  formatRange,
+  formatShare,
+  labelAlpha,
+  labelLines,
+  labelPlate,
+  labelText,
+  placeLabels,
+  type LabelKind,
+} from './atlas-preview';
+import './atlas-preview.css';
+
+const posters = import.meta.glob('../../data/figures/hbs-globe-poster.*.svg', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+const poster = Object.values(posters)[0];
+
+const callout = (kind: LabelKind) =>
+  provenance.callouts.find((entry) => entry.kind === kind)!;
+const tiers = provenance.tier_limits_km;
+const [domainLo, domainHi] = provenance.metric_domain.post_mean;
+// The ramp's domain in whole percent, outward ("0–17%").
+const domainMin = Math.floor(domainLo * 100);
+const domainMax = Math.round(domainHi * 100);
+
+const latLon = (lat: number, lon: number) =>
+  `${Math.abs(lat).toFixed(1)}°${lat < 0 ? 'S' : 'N'} ${Math.abs(lon).toFixed(1)}°${lon < 0 ? 'W' : 'E'}`;
+
+/*
+ * The labels at rest (ruling 23). Each point's place on the disc comes from the sidecar (`disc`, in
+ * disc radii from the centre, y down). The side each label sits on is the one the island's own rule
+ * (placeLabels) picks for the smallest disc the page draws, with generous text widths, so a label
+ * that fits there fits every disc; the island keeps that side while it fits. A label that cannot be
+ * placed at rest fails the build (spec §12: never silently drop).
+ *
+ * Counts are in people (R2-16): HBB is autosomal, so the survey's AN alleles are AN / 2 people
+ * tested (exact; the figure build fails on an odd AN). How many of them carry the variant needs
+ * genotype counts the survey does not give, so no carrier count is claimed.
+ */
+const kinds = ['survey', 'modeled', 'unknown'] as const;
+const rest = kinds.map((kind, index) => {
+  const entry = callout(kind);
+  const [x, y] = entry.disc as [number, number];
+  const lines = labelLines(kind, provenance);
+  return {
+    kind,
+    order: index + 1,
+    lines,
+    disc: [x, y] as const,
+    cosc: Math.sqrt(Math.max(0, 1 - x * x - y * y)),
+    width: estimateLabelWidth(lines),
+    lat: entry.lat,
+    lon: entry.lon,
+  };
+});
+const placed = placeLabels(
+  rest.map((label) => ({
+    kind: label.kind,
+    x: label.disc[0] * LABEL_MIN_RADIUS,
+    y: label.disc[1] * LABEL_MIN_RADIUS,
+    cosc: label.cosc,
+    width: label.width,
+    height: label.lines.length * LABEL_GEOMETRY.line,
+  })),
+  LABEL_MIN_RADIUS,
+);
+for (const placement of placed)
+  if (!placement.fits || !placement.side)
+    throw new Error(
+      `AtlasPreview: the ${placement.kind} label does not fit beside its point at rest on a ${LABEL_MIN_RADIUS} px disc`,
+    );
+// Positions in the globe box, as a share of its size (the disc is the box less DISC_PAD).
+const pct = (value: number) => `${(50 + (value * 50) / DISC_PAD).toFixed(3)}%`;
+const labels = rest.map((label, index) => {
+  const side = placed[index].side!;
+  return {
+    ...label,
+    side,
+    text: labelText(side, label.lines.length),
+    plate: labelPlate(side, label.width, label.lines.length),
+    style: `--lx: ${pct(label.disc[0])}; --ly: ${pct(label.disc[1])}; opacity: ${labelAlpha(label.cosc)}`,
+  };
+});
+// The words screen readers get, always (ruling 25), in the copy deck's form ("Measured: …").
+const spoken = labels.map(
+  ({ lines: [kind, ...value], lat, lon }) =>
+    `${kind}: ${value.join(' ')}, at ${latLon(lat, lon)}.`,
+);
+
+const config = JSON.stringify({
+  domain: provenance.metric_domain.post_mean,
+  survey: callout('survey').survey_index,
+  modeled: callout('modeled').area_index,
+  unknown: callout('unknown').area_index,
+});
+
+const share = (value: number) => `${(value * 100).toFixed(1)}%`;
+const tierRows = [
+  [
+    `Survey within ${formatKm(tiers.strong)}`,
+    provenance.table.model_cell_share_by_tier.strong,
+  ],
+  [
+    `Within ${formatKm(tiers.partial)}`,
+    provenance.table.model_cell_share_by_tier.partial,
+  ],
+  [
+    `Within ${formatKm(tiers.weak)}`,
+    provenance.table.model_cell_share_by_tier.weak,
+  ],
+  ['No estimate', provenance.table.model_cell_share_by_tier.none],
+] as const;
+const revision = provenance.hf_revision.slice(0, 7);
+// Home's island, in src/pages/index.astro, starts this figure with initAtlasPreview.
+---
+
+<Figure
+  graphic="atlas-preview"
+  interactive
+  label="A preview of the genomeOS Atlas: the sickle-cell variant HbS on a globe, measured surveys and the modeled surface"
+  class="hg"
+  id="atlas-preview"
+  readoutAfterLegend
+  data-motion-exception="atlas-preview"
+>
+  <Fragment slot="toolbar">
+    <Segmented
+      label="Layer"
+      class="hg-layers"
+      items={[
+        { value: 'measured', label: 'Measured' },
+        { value: 'modeled', label: 'Modeled' },
+      ]}
+      selected="modeled"
+    />
+    {
+      /* The kit's scene-control glyph (SceneControls.astro's markup and styles, ruling 22), with
+         the preview's own hook: shown only while the globe can turn by itself (atlas-preview.ts). */
+    }
+    <div class="kit-scene-controls" data-scene-controls data-select="multiple">
+      <button
+        type="button"
+        class="kit-scene-control"
+        data-scene-toggle
+        data-spin-toggle
+        data-state="playing"
+        aria-pressed="false"
+        hidden
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path
+            class="kit-scene-control__pause"
+            d="M5 3.5h3.2v13H5zM11.8 3.5H15v13h-3.2z"></path>
+          <path class="kit-scene-control__play" d="M6 3.3v13.4L16.4 10z"></path>
+        </svg>
+        <span class="visually-hidden">Pause the rotation</span>
+      </button>
+    </div>
+  </Fragment>
+
+  <div
+    class="hg-globe"
+    tabindex="0"
+    role="img"
+    aria-label={provenance.alt}
+    aria-describedby="atlas-preview-keys"
+    aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home"
+    data-config={config}
+  >
+    <img
+      class="hg-poster"
+      src={poster}
+      width="640"
+      height="640"
+      alt=""
+      loading="lazy"
+      decoding="async"
+    />
+    <canvas class="hg-canvas" aria-hidden="true"></canvas>
+    <svg class="hg-labels" aria-hidden="true" focusable="false">
+      {
+        labels.map((label) => (
+          <g
+            class="hg-label"
+            data-label={label.kind}
+            data-order={label.order}
+            data-side={label.side}
+            data-width={label.width}
+            style={label.style}
+          >
+            <g class="hg-label__body">
+              <circle class="hg-label__halo" r={LABEL_GEOMETRY.ring} />
+              <circle class="hg-label__ring" r={LABEL_GEOMETRY.ring} />
+              <rect
+                class="hg-label__plate"
+                x={label.plate.x}
+                y={label.plate.y}
+                width={label.plate.width}
+                height={label.plate.height}
+              />
+              <text class="hg-label__text" text-anchor={label.text.anchor}>
+                {label.lines.map((line, index) => (
+                  <tspan
+                    class={index === 0 ? 'hg-label__kind' : undefined}
+                    x={label.text.x}
+                    y={label.text.ys[index]}
+                  >
+                    {line}
+                  </tspan>
+                ))}
+              </text>
+            </g>
+          </g>
+        ))
+      }
+    </svg>
+  </div>
+  <p class="visually-hidden" id="atlas-preview-keys">
+    Arrow keys turn the globe; Home returns it to its starting view. Focus
+    pauses it.
+  </p>
+  <ul
+    class="visually-hidden"
+    id="atlas-preview-labels"
+    aria-label="Marked on the globe"
+  >
+    {spoken.map((item) => <li>{item}</li>)}
+  </ul>
+
+  {
+    /* The readout's slot, under the key (readoutAfterLegend): what this is, and where the real
+       thing is (R2-14). */
+  }
+  <div slot="readout" class="figure-note hg-note" data-figure-chrome>
+    <p>A simplified preview, made from a sample of real Atlas data.</p>
+    <a
+      class="atlas-open"
+      href={sitePath('/app/?entity=hbs-rs334&palette=genome')}
+    >
+      <span class="atlas-open__label"
+        >Open the <span class="brand-name">genomeOS</span> Atlas</span
+      >
+      <svg
+        class="atlas-open__arrow"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M5 12h13M13 6l6 6-6 6"></path>
+      </svg>
+    </a>
+  </div>
+
+  <Fragment slot="legend">
+    <strong class="hg-legend__lead">Shown: the sickle-cell variant, HbS.</strong
+    >
+    <div class="hg-legend">
+      <div class="hg-legend__variant" data-legend="modeled" data-active>
+        <span class="hg-key">
+          <span class="hg-key__studs">
+            <Glyph name="stud-sm" />
+            <Glyph name="stud-md" />
+            <Glyph name="stud-lg" />
+          </span>
+          <span>Surveys, sized by people tested</span>
+        </span>
+        <span class="hg-key hg-key--wedge">
+          <span class="hg-wedge__top"
+            >Modeled share, {domainMin}–{domainMax}% of gene copies</span
+          >
+          <Glyph name="vsup-wedge" size={22} />
+          <span class="hg-wedge__side">Fades away from surveys</span>
+        </span>
+        <span class="hg-key"
+          ><Glyph name="hatch" /><span>No estimate</span></span
+        >
+      </div>
+      <div class="hg-legend__variant" data-legend="measured">
+        <span class="hg-key">
+          <span class="hg-key__studs">
+            <Glyph name="stud-sm" />
+            <Glyph name="stud-md" />
+            <Glyph name="stud-lg" />
+          </span>
+          <span>Surveys, sized by people tested</span>
+        </span>
+        <span class="hg-key"
+          ><Glyph name="hex-land" /><span>Model grid, no values drawn</span
+          ></span
+        >
+        <span class="hg-key"
+          ><Glyph name="hatch" /><span>No estimate</span></span
+        >
+      </div>
+    </div>
+  </Fragment>
+
+  <Fragment slot="footnote">
+    {provenance.label} · model {provenance.model_version} · data {
+      provenance.data_version
+    } · revision {revision} · coarsened for display
+  </Fragment>
+
+  <div slot="table" class="hg-table">
+    <table>
+      <caption class="visually-hidden">
+        The ten areas with the highest modeled frequency
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Area center</th>
+          <th scope="col">Modeled</th>
+          <th scope="col">95% range across the area</th>
+          <th scope="col">Nearest survey</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          provenance.table.top_areas.map((area) => (
+            <tr>
+              <td>{latLon(area.lat, area.lon)}</td>
+              <td>{formatShare(area.mean)}</td>
+              <td>{formatRange(area.lo, area.hi)}</td>
+              <td>{formatKm(area.nearest_survey_km)}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+    <table>
+      <caption class="visually-hidden"
+        >Model cells by distance to the nearest survey</caption
+      >
+      <thead>
+        <tr>
+          <th scope="col">Distance to the nearest survey</th>
+          <th scope="col">Share of model cells</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          tierRows.map(([label, value]) => (
+            <tr>
+              <td>{label}</td>
+              <td>{share(value)}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+    <p>
+      Measured surveys: {provenance.counts.surveys.toLocaleString('en-US')}
+    </p>
+  </div>
+</Figure>

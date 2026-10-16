@@ -1,14 +1,13 @@
 @import '@fontsource-variable/figtree';
 @import '@fontsource-variable/raleway';
 @import './tokens.css';
-@import './home.css';
-@import './metrics.css';
-@import './applications.css';
+/* Page stylesheets are imported by their pages (#454): Home imports home, metrics, applications,
+ * mission and process; Project imports vision; each page imports styles/pages/<page>.css. */
 @import './github-cta.css';
-@import './mission.css';
-@import './process.css';
-@import './vision.css';
 @import './motion.css';
+@import './layout.css';
+/* The astronaut rig, typing, scene controls and figure notes (round 2 spec §3). */
+@import './scenes.css';
 
 * {
   box-sizing: border-box;
@@ -51,7 +50,9 @@ a:hover {
 }
 
 :focus-visible {
-  border-radius: 2px;
+  /* Square, as every control (spec §2.4): a rounded corner here also rounds the ring's (design
+     critique 2, m-3). */
+  border-radius: 0;
   outline: 2px solid var(--color-ion);
   outline-offset: 4px;
   box-shadow: var(--focus-ring);
@@ -61,6 +62,50 @@ img,
 svg {
   display: block;
   max-width: 100%;
+}
+
+/* The site's one range control (spec §2.4, square corners): a hairline ion track and a square ion
+   thumb, on Project's threshold map and Home's counts figure alike. */
+.kit-range {
+  width: 100%;
+  min-height: 2rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.kit-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--color-line-strong);
+}
+
+.kit-range::-moz-range-track {
+  height: 2px;
+  background: var(--color-line-strong);
+}
+
+.kit-range::-webkit-slider-thumb {
+  width: 14px;
+  height: 22px;
+  margin-top: -10px;
+  border: 2px solid var(--color-void);
+  background: var(--color-ion);
+  appearance: none;
+}
+
+.kit-range::-moz-range-thumb {
+  width: 12px;
+  height: 20px;
+  border: 2px solid var(--color-void);
+  border-radius: 0;
+  background: var(--color-ion);
+}
+
+.kit-range:focus-visible {
+  border-radius: 0;
+  outline: 2px solid var(--color-ion);
+  outline-offset: 4px;
 }
 
 .skip-link {
@@ -80,9 +125,11 @@ svg {
 }
 
 /* The site header's bar at the top of a page (the hero fills the rest of the
- * first screen). The Atlas keeps its own 4.75rem bar. */
+ * first screen), and once the page scrolls (MotionController) the compact bar
+ * of .site-header--lockup. The Atlas keeps its own 4.75rem bar. */
 :root {
   --site-header-height: 5.5rem;
+  --compact-header-height: 3.9rem;
 }
 
 .site-header {
@@ -188,7 +235,6 @@ svg {
  */
 .site-header--lockup {
   --header-ease: cubic-bezier(0.2, 0.75, 0.25, 1);
-  --compact-header-height: 3.9rem;
   --lockup-landing-width: calc(3.6rem * 1395 / 300);
   --lockup-compact-width: calc(2.6rem * 1395 / 300);
   position: fixed;
@@ -250,10 +296,10 @@ svg {
 
 /*
  * The nav never shrinks, so its labels keep to one line and GitHub's text to
- * Technical docs' line. In a tight row something else gives way: the lockup
- * on most pages (above), and on the Atlas the status chip, whose copy
- * ellipsizes. With GitHub in the nav, the Atlas row's loading messages
- * otherwise wrapped Working groups and Technical docs, up to ~1259 px.
+ * Docs' line. In a tight row something else gives way: the lockup on most
+ * pages (above), and on the Atlas the status chip, whose copy ellipsizes. With
+ * GitHub in the nav, the Atlas row's loading messages once wrapped the nav's
+ * two-word labels (before #454 shortened them), up to ~1259 px.
  */
 .site-header__inner > .desktop-nav {
   flex-shrink: 0;
@@ -654,12 +700,14 @@ svg {
   font-size: 1rem;
 }
 
+.site-footer__links-row,
 .site-footer__links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
 }
 
+.site-footer__contact,
 .site-footer__links a,
 .site-footer__button {
   min-height: 24px;
@@ -677,6 +725,7 @@ svg {
   cursor: pointer;
 }
 
+.site-footer__contact:hover,
 .site-footer__links a:hover,
 .site-footer__button:hover {
   color: var(--color-starlight);
@@ -740,6 +789,30 @@ svg {
   color: var(--color-starlight);
   text-decoration: none;
 }
+/* 44 px touch targets (WCAG 2.5.8 asks 24; design critique 3), made of padding that takes no room:
+ * a link's own padding, as it is inline, and GitHub's, taken back by its margins. Every label
+ * stays where it was. */
+.mobile-nav li > a {
+  padding-block: 0.6rem;
+}
+.mobile-nav .github-link {
+  margin-block: -0.4rem;
+  padding-block: 0.4rem;
+}
+/* The current page, marked as the docs sidebar marks it: ion, with a square side rule at the
+ * panel's inner edge (the desktop nav brightens it instead), 0.2rem beyond the label's glyphs. */
+.mobile-nav a[aria-current='page'] {
+  position: relative;
+  color: var(--color-ion);
+}
+.mobile-nav a[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: calc(0.6rem - 0.2rem);
+  bottom: calc(0.6rem - 0.2rem);
+  left: -1.2rem;
+  border-left: 3px solid var(--color-ion);
+}
 
 /*
  * The Menu stands in for the desktop nav up to 72rem: 1152 px, since media
@@ -747,8 +820,8 @@ svg {
  * desktop nav left the lockup 156 px wide at 1025 px (FOUNDATION 4.6 px, and
  * smaller than the compact logo); at 1153 px it is 264 px. The Atlas follows
  * the same line: beside its status chip, the SVG wordmark (31 px wider than
- * the old text one) wrapped "Working groups" and "Technical docs" onto two
- * lines up to 1058 px.
+ * the old text one) wrapped the nav's two-word labels (before #454 shortened
+ * them) onto two lines up to 1058 px.
  */
 @media (max-width: 72rem) {
   .desktop-nav {
@@ -802,33 +875,20 @@ svg {
     white-space: nowrap;
   }
 
-  .hero {
-    min-height: min(43rem, calc(100svh - var(--site-header-height)));
-  }
-  .hero__image {
-    background-position: 69% center;
-    opacity: 0.85;
-  }
-  .hero::after {
-    background: linear-gradient(
-      90deg,
-      #020712 1%,
-      rgb(2 7 18 / 80%) 58%,
-      rgb(2 7 18 / 28%)
-    );
-  }
-  .hero h1 {
-    max-width: 10ch;
-  }
-  .hero__lede {
-    max-width: 27rem;
-  }
-  .intro-section__grid {
-    grid-template-columns: 1fr;
-  }
   .site-footer__inner {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Too narrow for the footer's three links on one row (about 304 px): one column, never one link
+ * above two (design critique 3, m-5). The markup stays, so Contact keeps out of the Site policies
+ * nav. */
+@media (max-width: 22rem) {
+  .site-footer__links-row,
+  .site-footer__links {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -880,9 +940,7 @@ svg {
   html {
     scroll-behavior: auto;
   }
-  .hero__image {
-    animation: none;
-  }
+
   .site-header,
   .site-header__inner,
   .wordmark__logo,
@@ -925,12 +983,14 @@ svg {
   }
 }
 
-/* A fixed header would repeat on every printed page; print it once, in flow. */
+/* A fixed header would repeat on every printed page; print it once, in flow. The skip link is
+ * for keyboards only: fixed, it printed at the foot of every page. */
 @media print {
   .site-header--lockup {
     position: static;
   }
-  .site-header-spacer {
+  .site-header-spacer,
+  .skip-link {
     display: none;
   }
 }
