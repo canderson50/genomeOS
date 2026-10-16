@@ -15,7 +15,6 @@ import {
   delayArtifactTier,
   displayedArtifactIds,
   failArtifactTier,
-  installAtlasBrowserFixture,
   readInlineCatalog,
   urlMatchesKey,
 } from './atlas-browser-fixture';
@@ -51,12 +50,10 @@ import {
   SURFACE_ONLY,
   waveFrame,
 } from './atlas-reveal-wave-helpers';
+import { useSiteFixtures } from './helpers/marketing';
 import { topLevelRoutes } from './site-routes';
 
-test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
-test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: 'ignoreErrors' });
-});
+useSiteFixtures();
 
 async function chooseAtlasMap(page: Page, id: string): Promise<void> {
   await page
@@ -97,7 +94,7 @@ for (const route of topLevelRoutes) {
   });
 }
 
-test('primary navigation reaches working groups and exposes GitHub access', async ({
+test('primary navigation reaches Contribute and exposes GitHub access', async ({
   page,
   isMobile,
 }) => {
@@ -128,11 +125,11 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
     await expect(atlas).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Mobile navigation' })
-      .getByRole('link', { name: 'Working groups' })
+      .getByRole('link', { name: 'Contribute' })
       .click();
   } else {
-    // GitHub is the nav's last link, right after Technical docs; genomeOS
-    // Atlas stands outside the nav.
+    // GitHub is the nav's last link, right after Contact; genomeOS Atlas
+    // stands outside the nav.
     const primary = page.getByRole('navigation', {
       name: 'Primary navigation',
     });
@@ -146,22 +143,565 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
           ),
         ),
     ).toEqual([
-      'Project',
-      'Working groups',
+      'Projects',
       'Contribute',
-      'Technical docs',
+      'Docs',
+      'Contact',
       'View genomeOS on GitHub',
     ]);
     await expect(
       primary.getByRole('link', { name: 'genomeOS Atlas' }),
     ).toHaveCount(0);
-    await primary.getByRole('link', { name: 'Working groups' }).click();
+    await primary.getByRole('link', { name: 'Contribute' }).click();
   }
 
-  await expect(page).toHaveURL(/\/working-groups\/$/);
+  await expect(page).toHaveURL(/\/contribute\/$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    'Choose the part of the problem',
+    'Find work that fits how you think.',
   );
+});
+
+// Round 2 (spec §1.1, R2-4): one nav list everywhere. The site header, its Menu, the docs header
+// and the 404 read PRIMARY_NAV, so they name the same links in the same order.
+const NAV_NAMES = [
+  'Projects',
+  'Contribute',
+  'Docs',
+  'Contact',
+  'View genomeOS on GitHub',
+];
+const linkNames = (scope: Locator) =>
+  scope
+    .getByRole('link')
+    .evaluateAll((links) =>
+      links.map(
+        (link) => link.getAttribute('aria-label') ?? link.textContent!.trim(),
+      ),
+    );
+
+test(
+  'the site header, the docs header and the 404 name the same nav',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    for (const route of ['/', '/projects/', '/docs/', '/404.html']) {
+      await page.goto(route);
+      expect(
+        await linkNames(
+          page.getByRole('navigation', { name: 'Primary navigation' }),
+        ),
+        route,
+      ).toEqual(NAV_NAMES);
+    }
+  },
+);
+
+test(
+  'the Menu names the same nav',
+  { tag: '@mobile-chromium' },
+  async ({ page }) => {
+    await page.goto('/');
+    await page.getByText('Menu', { exact: true }).click();
+    const names = await linkNames(
+      page.getByRole('navigation', { name: 'Mobile navigation' }),
+    );
+    expect(names.filter((name) => NAV_NAMES.includes(name))).toEqual(NAV_NAMES);
+  },
+);
+
+test(
+  'the docs header shows the GitHub link wherever the sidebar is not the mobile menu',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // From 50em Starlight's sidebar sits beside the page, so the mobile menu's social icons are
+    // gone; the header's own GitHub link must take over there, not only from 72em (#454 review).
+    for (const width of [800, 900, 1100, 1151, 1152, 1200, 1300, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/docs/');
+      const github = page
+        .locator('header')
+        .getByRole('link', { name: 'View genomeOS on GitHub' });
+      await expect(github, `${width} px`).toBeVisible();
+      await expect(github).toHaveAttribute(
+        'href',
+        'https://github.com/genomeOS/genomeOS',
+      );
+      // The page links join it once there is room for the whole nav: from 72em, and an em in a
+      // media query is the 16 px initial size, not the 18 px root, so from 1,152 px.
+      for (const name of ['Contribute', 'Contact'])
+        await expect(
+          page
+            .getByRole('navigation', { name: 'Primary navigation' })
+            .getByRole('link', { name }),
+          `${name} at ${width} px`,
+        ).toBeVisible({ visible: width >= 1152 });
+      // The docs header holds one row: nothing overflows it.
+      expect(
+        await page.evaluate(() => {
+          const row = document.querySelector('.docs-header')!;
+          return row.scrollWidth - row.clientWidth;
+        }),
+        `${width} px`,
+      ).toBeLessThanOrEqual(0);
+    }
+  },
+);
+
+// Design critique of the integrated build, round 2: at 1,024 px the docs bar had no primary nav and
+// no "Menu +" where site pages show it, and its Atlas pill wore a line globe and dropped the arrow
+// at 1,440 px. The pill is the site's at every width (the favicon's colour globe, the arrow
+// wherever the site's pill shows one), and from 50em to 72em the bar shows the site's Menu.
+test(
+  'the docs Atlas pill is the site pill: its colour globe, and its arrow where the site shows one',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // (The docs nav takes the row from 72em, so the compact pill starts there, a pixel before the
+    // site's 72.01rem; 1,152 px itself is left out.)
+    for (const width of [800, 1024, 1151, 1153, 1300, 1392, 1393, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/contribute/');
+      const site = await page
+        .locator('.launch-atlas-cta__arrow')
+        .evaluate((arrow) => arrow.checkVisibility());
+      await page.goto('/docs/');
+      const docs = await page
+        .locator('.docs-header__atlas')
+        .evaluate((pill) => ({
+          arrow: pill
+            .querySelector('.docs-header__atlas-arrow')!
+            .checkVisibility(),
+          stops: [...pill.querySelectorAll('stop')].map((stop) =>
+            stop.getAttribute('stop-color'),
+          ),
+          mark: pill
+            .querySelector('.docs-header__atlas-mark')!
+            .getBoundingClientRect().width,
+        }));
+      expect(docs.arrow, `${width} px arrow`).toBe(site);
+      // The favicon's gradient, from ion to violet, on the favicon's globe.
+      expect(docs.stops[0], `${width} px`).toBe('#12ffff');
+      expect(docs.stops.at(-1), `${width} px`).toBe('#9d11fc');
+      expect(docs.mark, `${width} px`).toBeGreaterThanOrEqual(20);
+    }
+  },
+);
+
+test(
+  'the docs bar shows the site’s "Menu +" from 50em to 72em, and it opens on the page links',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    for (const width of [800, 1024, 1151, 1152, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/docs/');
+      const menu = page.locator('header details.docs-menu');
+      const summary = menu.locator('summary');
+      await expect(summary, `${width} px`).toBeVisible({
+        visible: width < 1152,
+      });
+      if (width >= 1152) continue;
+      await expect(summary).toHaveText('Menu');
+      const target = (await summary.boundingBox())!;
+      expect(target.height, `${width} px`).toBeGreaterThanOrEqual(44);
+      await summary.click();
+      const nav = page.getByRole('navigation', { name: 'Site navigation' });
+      await expect(nav).toBeVisible();
+      expect(await linkNames(nav)).toEqual(
+        NAV_NAMES.filter((name) => name !== 'View genomeOS on GitHub'),
+      );
+      await expect(nav.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      // It stays inside the screen, and Escape closes it, focus back on its summary.
+      const panel = (await nav.boundingBox())!;
+      expect(panel.x, `${width} px`).toBeGreaterThanOrEqual(0);
+      expect(panel.x + panel.width, `${width} px`).toBeLessThanOrEqual(width);
+      await nav.getByRole('link', { name: 'Projects' }).focus();
+      await page.keyboard.press('Escape');
+      await expect(nav).toBeHidden();
+      await expect(summary).toBeFocused();
+      // A press outside closes it too.
+      await summary.click();
+      await expect(nav).toBeVisible();
+      await page
+        .locator('main p')
+        .first()
+        .click({ position: { x: 2, y: 2 } });
+      await expect(nav).toBeHidden();
+    }
+  },
+);
+
+// Design review, round 2: the docs header set its nav right-aligned after Search, at weight 560 in
+// a lighter grey, with GitHub 2 px above the others, so from Home to Docs the primary nav jumped
+// about 440 px and changed weight. It reads as the site's: lockup, nav, then Search and the Atlas
+// link on the right; the site's weight and colours; one baseline.
+test(
+  'the docs header orders and sets its nav as the site header does',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const style = () =>
+      page
+        .getByRole('navigation', { name: 'Primary navigation' })
+        .getByRole('link')
+        .evaluateAll((links) =>
+          links.map((link) => {
+            const label = link.querySelector('span') ?? link;
+            const { fontWeight, color, fontSize } = getComputedStyle(label);
+            return [
+              link.getAttribute('aria-current') ? 'current' : 'link',
+              fontWeight,
+              color,
+              fontSize,
+            ].join(' ');
+          }),
+        );
+    for (const width of [1440, 1153, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/contribute/');
+      const site = await style();
+      // Design review, round 3: the lockup and the nav also stand where the compact site header
+      // puts them (the site gutter and 76rem container, the compact lockup), so neither jumps.
+      await page.evaluate(() => window.scrollTo(0, 900));
+      await expect(page.locator('.site-header')).toHaveClass(
+        /site-header--compact/,
+      );
+      const siteLogo = page.locator('.wordmark__logo');
+      const compactWidth = (2.6 * 18 * 1395) / 300;
+      await expect
+        .poll(async () => (await siteLogo.boundingBox())!.width)
+        .toBeCloseTo(compactWidth, 0);
+      const siteHeader = await page.evaluate(() => ({
+        lockup: document
+          .querySelector('.wordmark__logo')!
+          .getBoundingClientRect()
+          .toJSON() as DOMRect,
+        firstLink: document
+          .querySelector('nav[aria-label="Primary navigation"] a')!
+          .getBoundingClientRect()
+          .toJSON() as DOMRect,
+      }));
+      for (const route of ['/docs/', '/docs/system-overview/']) {
+        await page.goto(route);
+        const docs = await style();
+        // Docs is current here as Contribute is there; current and plain links match the site's.
+        expect(docs[2], `${route} at ${width}`).toBe(site[1]);
+        expect(
+          docs.filter((_, index) => index !== 2),
+          `${route} at ${width}`,
+        ).toEqual(site.filter((_, index) => index !== 1));
+        const geometry = await page.evaluate(() => {
+          const header = document.querySelector('header')!;
+          const nav = header.querySelector(
+            'nav[aria-label="Primary navigation"]',
+          )!;
+          const search = header.querySelector('button[data-open-modal]')!;
+          const box = (element: Element) =>
+            element.getBoundingClientRect().toJSON();
+          const baselines = [...nav.querySelectorAll('a')].map((link) => {
+            const range = document.createRange();
+            range.selectNodeContents(link.querySelector('span') ?? link);
+            return range.getBoundingClientRect().bottom;
+          });
+          return {
+            lockup: box(header.querySelector('.docs-header__lockup')!),
+            nav: box(nav),
+            firstLink: box(nav.querySelector('a')!),
+            search: box(search),
+            atlas: box(header.querySelector('.docs-header__atlas')!),
+            navFirst: Boolean(
+              nav.compareDocumentPosition(search) &
+              Node.DOCUMENT_POSITION_FOLLOWING,
+            ),
+            baselines,
+          };
+        });
+        const at = `${route} at ${width}`;
+        for (const edge of ['left', 'width'] as const)
+          expect(
+            Math.abs(geometry.lockup[edge] - siteHeader.lockup[edge]),
+            `${at}: lockup ${edge}`,
+          ).toBeLessThan(1);
+        expect(
+          Math.abs(geometry.firstLink.left - siteHeader.firstLink.left),
+          `${at}: first nav link`,
+        ).toBeLessThan(1);
+        // (Round 2 held the nav within 80 px of the lockup; it now stands exactly where the site
+        // header puts it, after the landing lockup's slot, 134 px after the compact lockup at 1440.)
+        expect(geometry.nav.left, at).toBeGreaterThan(geometry.lockup.right);
+        expect(geometry.search.left, at).toBeGreaterThan(geometry.nav.right);
+        expect(geometry.atlas.left, at).toBeGreaterThanOrEqual(
+          geometry.search.right,
+        );
+        expect(geometry.navFirst, `${at}: tab order`).toBe(true);
+        expect(
+          Math.max(...geometry.baselines) - Math.min(...geometry.baselines),
+          `${at}: one baseline`,
+        ).toBeLessThan(0.75);
+      }
+    }
+  },
+);
+
+// Contact page spec §1 (review 3, I-1): with Contact in the nav, Search had 75 px at 1,152 px. Its
+// magnifier shrank to nothing and its key hint ran 50 px onto the Atlas link, while the header's
+// row still fit and the boxes still lined up, so this looks inside the button. Search sheds its
+// key hint, then its label, where its room is too small. "Ctrl K" is the wider hint and shows on
+// Linux and Windows, "⌘ K" on a Mac, so both are checked whatever the host.
+for (const [platform, hint] of [
+  ['MacIntel', '⌘K'],
+  ['Linux x86_64', 'CtrlK'],
+] as const) {
+  test(
+    `the docs Search keeps its magnifier whole and its key hint clear of the Atlas link (${hint})`,
+    { tag: '@desktop-chromium' },
+    async ({ page }) => {
+      await page.addInitScript((value) => {
+        Object.defineProperty(Navigator.prototype, 'platform', {
+          get: () => value,
+        });
+      }, platform);
+      const widths = [
+        800, 1100, 1151, 1152, 1153, 1180, 1200, 1240, 1280, 1300, 1392, 1440,
+        1920,
+      ];
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto('/docs/');
+        await page.evaluate(() => document.fonts.ready);
+        const search = page.locator('header button[data-open-modal]');
+        await expect(search).toBeEnabled();
+        await expect(search).toHaveAccessibleName('Search');
+        const at = `${width} px`;
+        const parts = await search.evaluate((button) => {
+          const box = (element: Element) =>
+            element.getBoundingClientRect().toJSON() as DOMRect;
+          const [icon, label, kbd] = [...button.children];
+          return {
+            overflow: button.scrollWidth - button.clientWidth,
+            button: box(button),
+            icon: box(icon),
+            iconEm: parseFloat(getComputedStyle(icon).fontSize),
+            shown: [...button.children]
+              .filter((part) => part.checkVisibility())
+              .map((part) => ({ tag: part.tagName, ...box(part) })),
+            label: label.checkVisibility(),
+            kbd: kbd.checkVisibility()
+              ? { text: kbd.textContent, right: box(kbd).right }
+              : null,
+            atlas: box(document.querySelector('.docs-header__atlas')!),
+          };
+        });
+        expect(parts.overflow, `${at}: overflow`).toBeLessThanOrEqual(0);
+        // The magnifier is whole: 1em across, as Starlight draws it.
+        expect(parts.icon.width, `${at}: magnifier`).toBeCloseTo(
+          parts.iconEm,
+          0,
+        );
+        for (const part of parts.shown) {
+          expect(part.left, `${at}: ${part.tag}`).toBeGreaterThanOrEqual(
+            parts.button.left,
+          );
+          expect(part.right, `${at}: ${part.tag}`).toBeLessThanOrEqual(
+            parts.button.right,
+          );
+        }
+        expect(parts.button.right, at).toBeLessThanOrEqual(parts.atlas.left);
+        expect(parts.button.width, `${at}: target`).toBeGreaterThanOrEqual(44);
+        expect(parts.button.height, `${at}: target`).toBeGreaterThanOrEqual(44);
+        if (parts.kbd) {
+          expect(parts.kbd.text, at).toBe(hint);
+          expect(parts.kbd.right, `${at}: key hint`).toBeLessThan(
+            parts.atlas.left,
+          );
+        }
+        // Search narrows first (round 2 spec §1.1), now that the Docs theme toggle sits beside it
+        // (§4.4), and the bar carries the site's "Menu +" up to 72em and the pill's arrow wherever
+        // the site's pill has it (design critique of the integrated build, round 2): the label and
+        // its key hint where there is room (about 1,000 px to 72em, and from 1,472 px); the label
+        // alone at 1,392 and 1,440 px; and the bare magnifier at 800 px and where the whole nav
+        // first shows (1,152 to 1,300 px).
+        if ((width >= 1000 && width < 1152) || width >= 1472) {
+          expect(parts.label, `${at}: label`).toBe(true);
+          expect(parts.kbd?.text, `${at}: key hint`).toBe(hint);
+        }
+        if (width === 1392 || width === 1440) {
+          expect(parts.label, `${at}: label`).toBe(true);
+          expect(parts.kbd, `${at}: no key hint`).toBeNull();
+        }
+        if (width <= 1153)
+          expect(
+            parts.shown.map(({ tag }) => tag),
+            at,
+          ).toEqual(
+            width === 800
+              ? ['svg']
+              : width < 1152
+                ? ['svg', 'SPAN', 'KBD']
+                : ['svg'],
+          );
+        if (width >= 1152 && width <= 1300)
+          expect(
+            parts.shown.map(({ tag }) => tag),
+            at,
+          ).toEqual(['svg']);
+      }
+      // The bare magnifier still opens Search, by pointer and by the shortcut it no longer shows.
+      await page.setViewportSize({ width: 1153, height: 800 });
+      await page.goto('/docs/');
+      const search = page.locator('header button[data-open-modal]');
+      await expect(search).toBeEnabled();
+      const dialog = page.getByRole('dialog', { name: 'Search' });
+      await search.click();
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await page.keyboard.press('ControlOrMeta+k');
+      await expect(dialog).toBeVisible();
+    },
+  );
+}
+
+// The docs shell speaks the site's visual language, not stock Starlight (design review, round 1):
+// Raleway at the site's weights and tracking, square controls, a square ion-ruled current item, and
+// the current page shown as the site shows it (no underline). Round 2 (spec §4.4, R2-9): paper is
+// the default, with display type 20 heavier and the current page in ink; the dark choice keeps
+// round 1's values. The site header's current "Docs" is the site's bar in both.
+const DOCS_THEMES = {
+  paper: { h1: '390', h2: '420', current: 'rgb(7, 24, 49)' },
+  dark: { h1: '370', h2: '400', current: 'rgb(242, 248, 255)' },
+} as const;
+const DOCS_PAGER = {
+  paper: { rule: 'rgba(0, 106, 130, 0.2)', hover: 'rgb(0, 106, 130)' },
+  dark: { rule: 'rgba(112, 230, 255, 0.18)', hover: 'rgb(112, 230, 255)' },
+} as const;
+const chooseDocsTheme = (page: Page, theme: keyof typeof DOCS_THEMES) =>
+  theme === 'dark'
+    ? page.addInitScript(() => localStorage.setItem('starlight-theme', 'dark'))
+    : Promise.resolve();
+
+for (const theme of ['paper', 'dark'] as const) {
+  test(`the docs shell uses the site’s type, square controls and current-page mark (${theme})`, async ({
+    page,
+    isMobile,
+  }) => {
+    const pins = DOCS_THEMES[theme];
+    await chooseDocsTheme(page, theme);
+    await page.goto('/docs/system-overview/');
+    const h1 = page.getByRole('heading', { level: 1 });
+    await expect(h1).toHaveCSS('font-weight', pins.h1);
+    await expect(h1).toHaveCSS('letter-spacing', /^-/);
+    const h2 = page.locator('.sl-markdown-content h2').first();
+    await expect(h2).toHaveCSS('font-weight', pins.h2);
+    if (isMobile) {
+      const menu = page.locator('.sl-menu-button');
+      await expect(menu).toHaveCSS('border-radius', '0px');
+      await expect(menu).not.toHaveCSS(
+        'background-color',
+        'rgb(242, 248, 255)',
+      );
+      await menu.click();
+    } else {
+      await expect(page.locator('button[data-open-modal]')).toHaveCSS(
+        'border-radius',
+        '0px',
+      );
+    }
+    const current = page.locator('#starlight__sidebar a[aria-current="page"]');
+    await expect(current).toHaveCSS('border-radius', '0px');
+    await expect(current).toHaveCSS('color', pins.current);
+    if (!isMobile) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const docs = page
+        .getByRole('navigation', { name: 'Primary navigation' })
+        .getByRole('link', { name: 'Docs' });
+      await expect(docs).toHaveCSS('color', 'rgb(242, 248, 255)');
+      await expect(docs).toHaveCSS('box-shadow', 'none');
+      await expect(docs).toHaveCSS('text-decoration-line', 'none');
+    }
+  });
+
+  // Design review, round 3: the previous and next cards were Starlight's rounded grey cards, set
+  // 4 px above the footer's Privacy link, and the docs H1 ran larger than the site's page H1.
+  test(`the docs pager cards are the site’s square link cards, clear of the footer links (${theme})`, async ({
+    page,
+    isMobile,
+  }) => {
+    const pins = DOCS_PAGER[theme];
+    await page.goto('/contribute/');
+    const siteH1 = await page
+      .getByRole('heading', { level: 1 })
+      .evaluate((heading) => getComputedStyle(heading).fontSize);
+    await chooseDocsTheme(page, theme);
+    await page.goto('/docs/system-overview/');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCSS(
+      'font-size',
+      siteH1,
+    );
+    const cards = page.locator('.pagination-links a');
+    await expect(cards).toHaveCount(2);
+    for (const card of await cards.all()) {
+      await expect(card).toHaveCSS('border-radius', '0px');
+      await expect(card).toHaveCSS('border-top-color', pins.rule);
+      await expect(card).toHaveCSS('box-shadow', 'none');
+    }
+    const gap = await page.evaluate(() => {
+      const last = [...document.querySelectorAll('.pagination-links a')].at(
+        -1,
+      )!;
+      const privacy = document.querySelector('.docs-site-links a')!;
+      return (
+        privacy.getBoundingClientRect().top -
+        last.getBoundingClientRect().bottom
+      );
+    });
+    // At least 2rem (36 px at the 18 px root).
+    expect(gap).toBeGreaterThanOrEqual(36);
+    if (!isMobile) {
+      await cards.first().hover();
+      await expect(cards.first()).toHaveCSS('border-top-color', pins.hover);
+    }
+  });
+}
+
+test('a docs section heading draws one full-width rule, even when it wraps', async ({
+  page,
+}) => {
+  // Starlight sets a heading inline beside its anchor link, so a rule on the h2 itself spanned
+  // only the heading's first line (#454 design review).
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of ['/docs/', '/docs/scientific-safeguards/']) {
+      await page.goto(route);
+      const rules = await page.evaluate(() => {
+        const content = document
+          .querySelector('.sl-markdown-content')!
+          .getBoundingClientRect().width;
+        return [...document.querySelectorAll('.sl-markdown-content h2')].map(
+          (heading) => {
+            const host = heading.closest('.sl-heading-wrapper') ?? heading;
+            return {
+              heading: heading.textContent?.trim(),
+              rule: getComputedStyle(host).borderTopWidth,
+              widthMatches:
+                Math.abs(host.getBoundingClientRect().width - content) < 1,
+              innerRule:
+                host === heading
+                  ? '0px'
+                  : getComputedStyle(heading).borderTopWidth,
+            };
+          },
+        );
+      });
+      expect(rules.length, `${route} at ${width} px`).toBeGreaterThan(0);
+      for (const rule of rules)
+        expect(rule, `${route} at ${width} px`).toMatchObject({
+          rule: '1px',
+          widthMatches: true,
+          innerRule: '0px',
+        });
+    }
+  }
 });
 
 test('Atlas status replaces the launch action only on the Atlas page', async ({
@@ -176,7 +716,7 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
     /loading|validating|rendering|revealing|Atlas ready/i,
   );
 
-  await page.goto('/project/');
+  await page.goto('/projects/');
   await expect(header.getByLabel('Atlas status')).toHaveCount(0);
   await expect(
     header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
@@ -355,7 +895,7 @@ test(
     // second for as long as the page was open. The clock runs the page's
     // timers; the curtains keep the real one.
     await page.clock.install();
-    await page.goto('/project/');
+    await page.goto('/projects/');
     const curtains = page.locator('.launch-atlas-cta__lights i');
     await expect(curtains).toHaveCount(3);
     const playStates = () =>
@@ -469,15 +1009,15 @@ test(
 );
 
 test(
-  'GitHub sits in the primary nav right after Technical docs, set exactly like it',
+  'GitHub sits in the primary nav right after Contact, set exactly like it',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
     const compare = () =>
       page.evaluate(() => {
         const nav = document.querySelector('nav.desktop-nav')!;
         const links = [...nav.querySelectorAll('a')];
-        const docs = links.find(
-          (link) => link.textContent!.trim() === 'Technical docs',
+        const contact = links.find(
+          (link) => link.textContent!.trim() === 'Contact',
         )!;
         const github = nav.querySelector<HTMLAnchorElement>('.github-link')!;
         const githubText = github.querySelector('span')!;
@@ -498,8 +1038,8 @@ test(
           return { top, bottom };
         };
         return {
-          after: links.indexOf(github) - links.indexOf(docs),
-          docs: { text: text(docs), type: type(docs) },
+          after: links.indexOf(github) - links.indexOf(contact),
+          contact: { text: text(contact), type: type(contact) },
           github: { text: text(githubText), type: type(githubText) },
           last: links[links.length - 1] === github,
         };
@@ -508,17 +1048,17 @@ test(
       const measured = await compare();
       expect(measured.after, label).toBe(1);
       expect(measured.last, label).toBe(true);
-      expect(measured.github.type, label).toEqual(measured.docs.type);
+      expect(measured.github.type, label).toEqual(measured.contact.type);
       for (const edge of ['top', 'bottom'] as const)
         expect(
-          Math.abs(measured.github.text[edge] - measured.docs.text[edge]),
+          Math.abs(measured.github.text[edge] - measured.contact.text[edge]),
           `${label}: text ${edge}`,
         ).toBeLessThanOrEqual(0.5);
     };
 
     for (const width of [1153, 1280, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const route of ['/', '/project/']) {
+      for (const route of ['/', '/projects/']) {
         await page.goto(route);
         await page.evaluate(() => document.fonts.ready);
         await expectAligned(`${route} at ${width} px, landing`);
@@ -1088,7 +1628,7 @@ for (const route of ['/', '/contribute/']) {
 
 // Home, and pages where, on phones, scroll anchoring used to correct scrollY
 // by a pixel and flip the header back.
-for (const route of ['/', '/project/', '/contribute/']) {
+for (const route of ['/', '/projects/', '/contribute/']) {
   test(`the header settles in one state while scrolling slowly across the threshold (${route})`, async ({
     page,
   }) => {
@@ -1199,9 +1739,9 @@ test('linked sections land below the fixed header, not under it', async ({
   // without scroll padding each heading ended at the viewport top, 71 px of
   // it under the compact bar.
   for (const [route, id, width, height] of [
-    ['/project/', 'safeguards-title', 1440, 900],
-    ['/', 'metrics-title', 390, 844],
-    ['/project/', 'pipeline-title', 844, 390],
+    ['/projects/', 'safeguards-title', 1440, 900],
+    ['/', 'join-title', 390, 844],
+    ['/projects/', 'pipeline-title', 844, 390],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.goto(`${route}#${id}`);
@@ -1276,7 +1816,7 @@ test(
     const desktopNavFrom = 1153;
     for (const width of [737, 1025, 1152, 1153, 1280, 1392, 1393]) {
       await page.setViewportSize({ width, height: 800 });
-      await page.goto('/project/');
+      await page.goto('/projects/');
       const row = await page.evaluate(() => {
         const inner = document.querySelector('.site-header__inner')!;
         const shown = (selector: string) =>
@@ -1356,7 +1896,7 @@ test(
 );
 
 test(
-  'the Atlas nav keeps its labels on one line, GitHub on Technical docs, while the status chip loads',
+  'the Atlas nav keeps its labels on one line, GitHub level with them, while the status chip loads',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
     // Hold the default map's surface, so the chip keeps its loading copy, a
@@ -1400,12 +1940,13 @@ test(
           return { bottom, lines: lines.size, top };
         };
         const links = [...nav.querySelectorAll('a')];
-        const docs = links.find(
-          (link) => link.textContent!.trim() === 'Technical docs',
+        // GitHub's text sits level with the link before it, Contact.
+        const contact = links.find(
+          (link) => link.textContent!.trim() === 'Contact',
         )!;
         const inner = document.querySelector('.site-header__inner')!;
         return {
-          docs: textBox(docs),
+          contact: textBox(contact),
           github: textBox(nav.querySelector('.github-link span')!),
           // GitHub's text is its <span>, beside the icon.
           lines: links.map(
@@ -1417,7 +1958,7 @@ test(
       expect(row.lines, label).toEqual([1, 1, 1, 1, 1]);
       for (const edge of ['top', 'bottom'] as const)
         expect(
-          Math.abs(row.github[edge] - row.docs[edge]),
+          Math.abs(row.github[edge] - row.contact[edge]),
           `${label}: text ${edge}`,
         ).toBeLessThanOrEqual(0.5);
       expect(row.overflow, label).toBeLessThanOrEqual(0);
@@ -1479,6 +2020,60 @@ test('the footer shows the full logo with a legible tagline', async ({
     (img) => (img.getBoundingClientRect().height * 43.23) / 435,
   );
   expect(taglinePx).toBeGreaterThanOrEqual(10);
+});
+
+// Design critique 3, m-5: at 320 px "Contact" stood alone above "Privacy · Cookie settings", and
+// the docs footer's three links made a small pyramid.
+test('at 320 px the footer links stack in one column, never one above two', async ({
+  page,
+}) => {
+  for (const [route, row, edge] of [
+    ['/', '.site-footer__links-row', 'left'],
+    ['/docs/system-overview/', '.docs-site-links', 'centre'],
+  ] as const)
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 700 });
+      await page.goto(route);
+      const links = await page.locator(row).evaluate((element) =>
+        [...element.querySelectorAll('a, button')].map((link) => {
+          const box = link.getBoundingClientRect();
+          return {
+            name: link.textContent!.trim(),
+            top: box.top,
+            bottom: box.bottom,
+            left: box.left,
+            centre: box.left + box.width / 2,
+          };
+        }),
+      );
+      const label = `${route} at ${width} px`;
+      expect(
+        links.map(({ name }) => name),
+        label,
+      ).toEqual(['Contact', 'Privacy', 'Cookie settings']);
+      links.slice(1).forEach((link, index) => {
+        const above = links[index];
+        if (width === 390) {
+          // Room for one row: they keep it.
+          expect(Math.abs(link.top - above.top), label).toBeLessThan(1);
+          return;
+        }
+        expect(link.top, `${label}: ${link.name}`).toBeGreaterThanOrEqual(
+          above.bottom - 0.5,
+        );
+        expect(
+          Math.abs(link[edge] - above[edge]),
+          `${label}: ${link.name}`,
+        ).toBeLessThan(1);
+      });
+      // Contact is not a policy: it stays outside the Site policies nav.
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Site policies' })
+          .getByRole('link', { name: 'Contact' }),
+        label,
+      ).toHaveCount(0);
+    }
 });
 
 test(
@@ -1779,9 +2374,13 @@ function auditBrandText(selector: string): {
           const wordmark = parent.closest<HTMLElement>(
             '.brand-name, .site-title',
           );
+          // The GitHub mock on Contribute shows the repository's name as GitHub sets it: in
+          // .brand-name, in the mock's own type (round 2 spec §4.3.4).
+          const githubMock = wordmark?.closest('[data-graphic="work-board"]');
           if (!wordmark) {
             failures.push(`${parent.tagName.toLowerCase()}: missing wordmark`);
           } else if (
+            !githubMock &&
             !getComputedStyle(wordmark).fontFamily.includes('Raleway')
           ) {
             failures.push(`${parent.tagName.toLowerCase()}: wrong font`);
@@ -1839,27 +2438,6 @@ test('the basemap picker sets genomeOS basemap names in the wordmark', async ({
   ).toEqual({ checked: 4, failures: [] });
 });
 
-test('project page labels all three capability states', async ({ page }) => {
-  await page.goto('/project/');
-  await expect(
-    page.getByRole('heading', { name: 'Available now' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'In active development' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Future exploration' }),
-  ).toBeVisible();
-});
-
-test('working-group page links each group to issue work', async ({ page }) => {
-  await page.goto('/working-groups/');
-  await expect(
-    page.getByRole('link', { name: 'Browse matching issues' }),
-  ).toHaveCount(3);
-  await expect(page.getByText('Group forming')).toHaveCount(3);
-});
-
 test('mobile navigation is a keyboard-operable disclosure', async ({
   page,
   isMobile,
@@ -1875,11 +2453,66 @@ test('mobile navigation is a keyboard-operable disclosure', async ({
   await expect(
     page.getByRole('navigation', { name: 'Mobile navigation' }),
   ).toBeVisible();
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Mobile navigation' })
-      .getByRole('link', { name: 'Technical docs' }),
-  ).toBeVisible();
+  const mobile = page.getByRole('navigation', { name: 'Mobile navigation' });
+  await expect(mobile.getByRole('link', { name: 'Docs' })).toBeVisible();
+  await expect(mobile.getByRole('link', { name: 'Contact' })).toBeVisible();
+  expect(
+    await mobile
+      .getByRole('link')
+      .evaluateAll((links) =>
+        links.map(
+          (link) => link.getAttribute('aria-label') ?? link.textContent!.trim(),
+        ),
+      ),
+  ).toEqual([
+    'Projects',
+    'Contribute',
+    'Docs',
+    'Contact',
+    'View genomeOS on GitHub',
+  ]);
+});
+
+// WCAG 2.5.8 asks 24 px, and the site's touch targets are 44 px; the Menu's links were 23 px
+// tall (design critique 3). Padding makes the target, so the Menu looks as it did.
+test('every Menu link is a 44 px target on a phone, at 390 and 320 px', async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [390, 844],
+    [320, 640],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    // /contact/ marks its own link as the current page.
+    for (const route of ['/', '/contact/']) {
+      await page.goto(route);
+      await page.locator('.mobile-nav summary').click();
+      const links = page
+        .getByRole('navigation', { name: 'Mobile navigation' })
+        .getByRole('link');
+      // Project, Contribute, Docs, Contact and GitHub.
+      await expect(links).toHaveCount(5);
+      const boxes = await links.evaluateAll((all) =>
+        all.map((link) => {
+          const box = link.getBoundingClientRect();
+          return {
+            name: link.textContent!.trim(),
+            top: box.top,
+            bottom: box.bottom,
+          };
+        }),
+      );
+      boxes.forEach(({ name, top, bottom }, index) => {
+        const label = `${name} at ${width} px on ${route}`;
+        expect(bottom - top, label).toBeGreaterThanOrEqual(44);
+        // Side by side in the list, never overlapping.
+        if (index > 0)
+          expect(top, label).toBeGreaterThanOrEqual(
+            boxes[index - 1].bottom - 0.5,
+          );
+      });
+    }
+  }
 });
 
 test('the Menu panel scrolls inside short viewports and closes on Escape or when focus leaves it', async ({
@@ -1904,6 +2537,7 @@ test('the Menu panel scrolls inside short viewports and closes on Escape or when
     await page.goto('/');
     await summary.click();
     await expect(menu).toHaveAttribute('open', '');
+    // Project, Contribute, Docs, Contact and GitHub.
     await expect(links).toHaveCount(5);
     for (const link of await links.all()) {
       const reachable = await link.evaluate((element) => {
@@ -1997,12 +2631,12 @@ test('the Menu closes on a click or focus anywhere outside it', async ({
   await expect(menu).toHaveAttribute('open', '');
 
   // And a press on one of its links still follows the link.
-  const link = panel.getByRole('link', { name: 'Working groups' });
+  const link = panel.getByRole('link', { name: 'Contribute' });
   if (isMobile) await link.tap();
   else await link.click();
-  await expect(page).toHaveURL(/\/working-groups\/$/);
+  await expect(page).toHaveURL(/\/contribute\/$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    'Choose the part of the problem',
+    'Find work that fits how you think.',
   );
 });
 
@@ -2259,21 +2893,6 @@ test('landscape phones get the shorter landing bar', async ({ page }) => {
   }
 });
 
-test('404 page offers three recovery routes', async ({ page }) => {
-  await page.goto('/404.html');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'That route is outside the atlas.',
-  );
-  const recovery = page.locator('main');
-  await expect(recovery.getByRole('link', { name: /Home/ })).toBeVisible();
-  await expect(
-    recovery.getByRole('link', { name: /Contribute/ }),
-  ).toBeVisible();
-  await expect(
-    recovery.getByRole('link', { name: /Technical docs/ }),
-  ).toBeVisible();
-});
-
 for (const route of topLevelRoutes) {
   test(`${route} does not create horizontal page scrolling`, async ({
     page,
@@ -2290,120 +2909,14 @@ for (const route of topLevelRoutes) {
   });
 }
 
-test('reduced-motion preferences disable decorative hero movement', async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-
-  const animationName = await page
-    .locator('.hero__image')
-    .evaluate((element) => getComputedStyle(element).animationName);
-  expect(animationName).toBe('none');
-
-  // The header still compacts, at once: no transition to animate it.
-  const header = page.locator('.site-header');
-  await expect(header).toHaveCSS('transition-duration', '0s');
-  await expect(page.locator('.site-header__inner')).toHaveCSS(
-    'transition-duration',
-    '0s',
-  );
-  await page.evaluate(() => window.scrollTo(0, 900));
-  await expect(header).toHaveClass(/site-header--compact/);
-  const box = (await header.boundingBox())!;
-  expect(Math.abs(box.y)).toBeLessThanOrEqual(1);
-  expect(box.height).toBeCloseTo(71.2, 0);
-});
-
-test('public typography keeps body and supporting text comfortably large', async ({
-  page,
-}) => {
-  await page.goto('/');
-
-  const typeSizes = await page.evaluate(() => {
-    const selectors = [
-      'body',
-      '.desktop-nav a',
-      '.section-kicker',
-      '.site-footer p',
-      '.mission-copy p',
-    ];
-    return Object.fromEntries(
-      selectors.map((selector) => [
-        selector,
-        Number.parseFloat(
-          getComputedStyle(document.querySelector(selector)!).fontSize,
-        ),
-      ]),
-    );
-  });
-
-  expect(typeSizes.body).toBeGreaterThanOrEqual(19);
-  for (const [selector, size] of Object.entries(typeSizes)) {
-    if (selector !== 'body') expect(size).toBeGreaterThanOrEqual(16);
-  }
-});
-
-test('metric digits use a common height and baseline', async ({ page }) => {
-  await page.goto('/');
-
-  const numericStyle = await page
-    .locator('.metric data')
-    .first()
-    .evaluate((element) => ({
-      family: getComputedStyle(element).fontFamily,
-      variant: getComputedStyle(element).fontVariantNumeric,
-    }));
-  expect(numericStyle.family).toContain('Figtree');
-  expect(numericStyle.variant).toContain('lining-nums');
-  expect(numericStyle.variant).toContain('tabular-nums');
-});
-
-test('multi-scale illustrations load with accessible descriptions', async ({
-  page,
-}) => {
-  await page.goto('/project/');
-  const images = page.locator('.vision-card img');
-  await expect(images).toHaveCount(3);
-  for (const image of await images.all()) {
-    await image.scrollIntoViewIfNeeded();
-    await expect(image).toHaveJSProperty('complete', true);
-    expect(await image.getAttribute('alt')).not.toBe('');
-    expect(
-      await image.evaluate((element: HTMLImageElement) => element.naturalWidth),
-    ).toBe(1536);
-  }
-});
-
 test('introduction pages avoid unexplained internal milestone codes', async ({
   page,
 }) => {
-  for (const route of ['/', '/project/', '/app/']) {
+  for (const route of ['/', '/projects/', '/app/']) {
     await page.goto(route);
     const text = await page.locator('main').innerText();
     expect(text).not.toMatch(/\bP[0-9]+\b/);
   }
-});
-
-test('application cards reveal on scroll and respond to hover', async ({
-  page,
-  isMobile,
-}) => {
-  test.skip(isMobile, 'hover movement is a pointer interaction');
-  await page.goto('/');
-
-  const card = page.locator('.application-card').first();
-  await card.scrollIntoViewIfNeeded();
-  await expect(card).toHaveClass(/is-visible/);
-  const restingTransform = await card.evaluate(
-    (element) => getComputedStyle(element).transform,
-  );
-  await card.hover();
-  await page.waitForTimeout(250);
-  const hoverTransform = await card.evaluate(
-    (element) => getComputedStyle(element).transform,
-  );
-  expect(hoverTransform).not.toBe(restingTransform);
 });
 
 test('explorer changes entity, metric, context, and elevation', async ({

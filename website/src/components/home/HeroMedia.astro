@@ -1,0 +1,161 @@
+---
+/**
+ * The Home hero's full-bleed film (site redesign round 2, ruling R2-1; round 2 spec §4.1.1; #454):
+ * the owner's render of Earth at night, played whole at a quarter speed as a seamless loop of about
+ * a minute, with no audio, behind the hero's text.
+ *
+ * A drop-in slot: the poster and the film are props, so swapping the clip is a change of files and
+ * of the `sources` list (src/pages/index.astro), nothing else.
+ *
+ *   poster   the film's first frame, from src/assets, as AVIF and WebP srcsets with explicit
+ *            dimensions and high fetch priority: the page's LCP, never lazy. Decorative (alt="").
+ *   film     an empty `<video muted loop playsinline preload="none">`, hidden from assistive tech;
+ *            hero-media.ts adds its sources after the load event, or keeps the poster
+ *   scrim    a gradient that keeps the text over the frame at 4.5:1 or more (hero-media.css; from the
+ *            left on wide screens, from the bottom on tall ones)
+ *   control  a white Pause/Play glyph with no background (ruling 22 of the round-2 build), after
+ *            the slotted text, so the calls to action are reached first (WCAG 2.4.3); shown only
+ *            once the film is going to play, or as Play over the poster for a visitor who paused
+ *            it before (WCAG 2.2.2; round 2 spec §0.3 #17)
+ *
+ * The slot holds the hero's text: its heading, lede and calls to action.
+ */
+import type { ImageMetadata } from 'astro';
+import { getImage } from 'astro:assets';
+
+import type { HeroVideoSource } from './hero-media';
+import './hero-media.css';
+
+interface Props {
+  /** The film's first frame, imported from src/assets (2560 × 1440 or larger). */
+  poster: ImageMetadata;
+  /** The film's renditions; within a width, in the order to try them (AV1, then HEVC). */
+  sources: HeroVideoSource[];
+  /** CSS object-position of the poster and film on wide (landscape) and tall (portrait) screens. */
+  position?: { wide: string; tall: string };
+  class?: string;
+}
+
+const {
+  poster,
+  sources,
+  position = { wide: '50% 50%', tall: '50% 50%' },
+  class: className,
+} = Astro.props;
+
+/*
+ * Widths for a full-bleed image. A landscape screen draws the frame about as wide as itself, so the
+ * browser picks by width: a 1440 px desktop at 1x takes 1440, a 2x laptop the 2560. A portrait one
+ * (a phone, a tablet upright) crops the middle of a frame drawn at the hero's height, much wider
+ * than the screen; there the poster is as wide as the film that will replace it (720p up to 640 px,
+ * 1080p wider), whatever the pixel ratio. Never narrower than the film: an upscaled poster counts
+ * as a smaller paint than the film's first frame, which would then become the page's LCP.
+ */
+const WIDTHS = [640, 960, 1280, 1440, 1920, 2560].filter(
+  (width) => width <= poster.width,
+);
+const QUALITY = { avif: 50, webp: 72 } as const;
+const variant = async (format: 'avif' | 'webp') => {
+  const images = await Promise.all(
+    WIDTHS.map((width) =>
+      getImage({ src: poster, width, format, quality: QUALITY[format] }),
+    ),
+  );
+  const at = (width: number) =>
+    images[WIDTHS.indexOf(width)]?.src ?? images.at(-1)!.src;
+  return {
+    srcset: images
+      .map((image, index) => `${image.src} ${WIDTHS[index]}w`)
+      .join(', '),
+    phone: at(1280),
+    tall: at(1920),
+    fallback: images.at(-1)!.src,
+  };
+};
+const formats = await Promise.all(
+  (['avif', 'webp'] as const).map(async (format) => ({
+    type: `image/${format}`,
+    ...(await variant(format)),
+  })),
+);
+const fallback = formats.find((format) => format.type === 'image/webp')!;
+const height = Math.round((WIDTHS.at(-1)! * poster.height) / poster.width);
+---
+
+<div
+  class:list={['hero-media', className]}
+  data-hero-media
+  data-motion-exception="hero-film"
+  data-video="poster"
+  style={`--hero-position-wide: ${position.wide}; --hero-position-tall: ${position.tall}`}
+>
+  <div class="hero-media__backdrop" data-hero-backdrop aria-hidden="true">
+    <picture>
+      {
+        formats.map((format) => (
+          <Fragment>
+            <source
+              type={format.type}
+              media="(orientation: portrait) and (max-width: 40em)"
+              srcset={format.phone}
+            />
+            <source
+              type={format.type}
+              media="(orientation: portrait)"
+              srcset={format.tall}
+            />
+          </Fragment>
+        ))
+      }
+      {
+        formats.map((format) => (
+          <source type={format.type} srcset={format.srcset} sizes="100vw" />
+        ))
+      }
+      <img
+        class="hero-media__poster"
+        src={fallback.fallback}
+        width={WIDTHS.at(-1)}
+        height={height}
+        alt=""
+        fetchpriority="high"
+        loading="eager"
+      />
+    </picture>
+    <video
+      class="hero-media__video"
+      muted
+      loop
+      playsinline
+      preload="none"
+      disablepictureinpicture
+      tabindex="-1"
+      data-sources={JSON.stringify(sources)}
+      {...{ disableremoteplayback: true }}></video>
+    <span class="hero-media__scrim"></span>
+  </div>
+  <div class="hero-media__content">
+    <slot />
+  </div>
+  {
+    /* White Pause/Play glyph, no background (ruling 22): the kit's scene-control look, placed by
+       hero-media.css. Its name says what a press does; the glyph shows it. */
+  }
+  <button
+    class="hero-media__toggle kit-scene-control"
+    type="button"
+    data-video-toggle
+    data-state="playing"
+    hidden
+  >
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path
+        class="kit-scene-control__pause"
+        d="M5 3.5h3.2v13H5zM11.8 3.5H15v13h-3.2z"></path>
+      <path class="kit-scene-control__play" d="M6 3.3v13.4L16.4 10z"></path>
+    </svg>
+    <span class="visually-hidden" data-video-toggle-text
+      >Pause the background video</span
+    >
+  </button>
+</div>

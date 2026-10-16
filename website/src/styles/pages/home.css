@@ -1,0 +1,780 @@
+/*
+ * Home (round 2 spec §4.1, §2.3–§2.7; #454). Imported by src/pages/index.astro only, so every rule
+ * here is Home's own. Sections: page type and calls to action · the bands · why it matters (the
+ * people figure, .people) · how it works (the steps plate, .hiw, and the open-source row) · our
+ * flagship project · join us (the crew, .crew, and its cards) · forced colours · reduced motion.
+ *
+ * Other files own the hero film and its text layout (components/home/hero-media.css) and the toy
+ * globe (components/home/atlas-preview.css). Scene motion runs on the timeline helper
+ * (src/graphics/timeline.ts) from each figure's module; this file holds the drawings' paint and
+ * the layouts, which media queries (viewport, 16 px rem) and container queries (the figure's
+ * width, 18 px rem) choose.
+ */
+
+/* ------------------------------------------------------------ page type and calls to action */
+
+#main-content .section-kicker {
+  margin: 0 0 0.9rem;
+  font-size: var(--type-kicker);
+  font-weight: 640;
+}
+
+.home-head h2 {
+  max-width: 22ch;
+  margin: 0;
+  color: var(--color-starlight);
+  font-family: var(--font-display);
+  font-size: var(--type-h2);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.home-lede {
+  max-width: 38ch;
+  margin: 1.25rem 0 0;
+  color: var(--color-text-soft);
+  font-size: var(--type-lede);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  margin-top: 1.25rem;
+  font-weight: 650;
+}
+
+/* A text link with an arrow: the label carries the underline, the arrow does not; the arrow leans
+   on hover. */
+:is(.home-link, .home-open__links a) {
+  text-decoration: none;
+}
+
+.arrow-link__label {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.22em;
+}
+
+.arrow-link__arrow {
+  transition: translate var(--dur-micro) var(--ease-ui);
+}
+
+:is(.home-link, .home-open__links a):hover .arrow-link__arrow {
+  translate: 0.2rem 0;
+}
+
+.button-link {
+  min-height: 3rem;
+  padding: 0.68rem 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-ion);
+  background: var(--color-ion);
+  color: var(--color-void);
+  font-weight: 720;
+  text-decoration: none;
+  transition:
+    background-color var(--dur-micro) var(--ease-ui),
+    border-color var(--dur-micro) var(--ease-ui);
+}
+
+.button-link:hover {
+  border-color: var(--color-starlight);
+  background: var(--color-starlight);
+  color: var(--color-void);
+}
+
+.button-link--quiet {
+  border-color: rgb(242 248 255 / 42%);
+  background: rgb(2 7 18 / 52%);
+  color: var(--color-starlight);
+}
+
+.button-link--quiet:hover {
+  border-color: var(--color-starlight);
+  background: rgb(2 7 18 / 78%);
+  color: var(--color-starlight);
+}
+
+/* ------------------------------------------------------------------------------- the bands */
+
+/* Four concept bands under the film, void and orbit in turn. */
+#main-content > .band {
+  --band-pad: clamp(4rem, 7vw, 5.5rem);
+}
+
+/* The film melts into the page (.hero-media__scrim), so no hairline marks where it ends
+   (rulings item 17): the band under it starts on its own colour. */
+.home-hero + .band {
+  border-top: 0;
+}
+
+/* The first band is orbit: it rises out of the film's void instead of starting on a hard edge. */
+.home-hero + .band--orbit {
+  background: linear-gradient(
+    var(--color-void),
+    var(--color-orbit) min(7rem, 60%)
+  );
+}
+
+/* ----------------------------------------------------------------------- why it matters */
+
+/* The people sit beside their text only where the split's 8 columns hold the 20 × 5 grid (a 33rem
+   figure, from a 62rem viewport). Narrower, the figure goes under the text at full width, where
+   the 20 × 5 grid still fits, instead of a 10 × 10 grid stretched twice as tall as its text. */
+@media (max-width: 61.99rem) {
+  .home-why .layout-figure-split > * {
+    grid-column: 1 / -1;
+  }
+
+  .home-why .layout-figure-split__figure {
+    margin-top: var(--head-gap);
+  }
+}
+
+/* Beside its text the figure is its grid's width, centred in its column (design critique 4: at
+   1440 the 562 px grid sat at the left of an 874 px column, under a key row that spanned the whole
+   column, so the figure looked lopsided). Title, grid, note, key and source share one measure. */
+@media (min-width: 62rem) {
+  .home-why .people {
+    max-width: 31.25rem;
+    margin-inline: auto;
+  }
+}
+
+/* PeopleFigure.astro: a data figure, open. The wide grid from a 31.25rem figure (a container
+   query). Each grid stops growing at a pixel a unit, people 24 × 30 px (562 units wide: 31.25rem;
+   282 units narrow: 15.75rem), left-aligned with the title and key; the note keeps to its grid's
+   width, so it ends under the ring's leader. Beside its text the whole figure takes the wide
+   grid's width (the rule above). */
+.people {
+  --micro-band: var(--color-orbit);
+
+  container: people / inline-size;
+}
+
+.people__title {
+  margin: 0;
+  color: var(--color-starlight);
+  font-size: var(--type-legend);
+  font-weight: 640;
+}
+
+.people .kit-figure__stage > svg.people__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.people .kit-figure__stage > svg.people__svg[data-layout='wide'] {
+  display: none;
+}
+
+.people .kit-figure__stage > svg.people__svg[data-layout='wide'],
+.people__note {
+  max-width: 31.25rem;
+}
+
+.people .kit-figure__stage > svg.people__svg[data-layout='narrow'] {
+  max-width: 15.75rem;
+}
+
+@container people (max-width: 31.24rem) {
+  .people__note {
+    max-width: 15.75rem;
+  }
+}
+
+@container people (min-width: 31.25rem) {
+  .people .kit-figure__stage > svg.people__svg[data-layout='wide'] {
+    display: block;
+  }
+
+  .people .kit-figure__stage > svg.people__svg[data-layout='narrow'] {
+    display: none;
+  }
+}
+
+.people__p,
+.people__tone,
+.people__ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.people__ring {
+  fill: none;
+  stroke: var(--color-starlight);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.people__leader {
+  stroke: var(--color-starlight);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+
+/* The note sits under the ring's leader: right-aligned, where the leader lands. */
+.people__note {
+  margin: 0.3rem 0 0;
+  color: var(--color-starlight);
+  font-size: var(--type-legend);
+  font-weight: 640;
+  line-height: 1.4;
+  text-align: right;
+  text-wrap: balance;
+}
+
+/* The note breaks after "diversity" (the owner, 2026-10-15). Each clause is a line of its own,
+   balanced on its own, so a phone wraps each into two even lines instead of leaving "research."
+   alone on the last. */
+.people__note > span {
+  display: block;
+}
+
+.people__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people__key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.people__key b {
+  min-width: 1.2em;
+  color: var(--color-starlight);
+  font-size: 1.05rem;
+  font-weight: 640;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: right;
+}
+
+.people__glyph {
+  flex: none;
+  width: 0.85rem;
+  height: 1.06rem;
+}
+
+/* The source note never leaves a lone word at a line's end or start: "A" keeps to "person" and
+   "each." to "in" (PeopleFigure.astro), and pretty wrapping takes a word or two more onto the last
+   line where it would be "in each." alone (834, 320; final verification). From 1024 each sentence
+   is a line of its own, as before. */
+.people .kit-figure__footnote {
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------------------- how it works */
+
+/* HowItWorks.astro (the kit Plate). Captions dim by colour, never by opacity: --hiw-lit mixes
+   faint into each caption's own colour, and how-it-works.ts animates it (registered, so it
+   interpolates; without @property it switches). */
+@property --hiw-lit {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+/* No top bar (design critique 4, ruling 59: a 58 px strip with a rule under it, holding only the
+   glyph, looked unfinished). Replay, the plate's one control, sits in the drawing's top-right
+   corner: a row of its own 44 px target, with no rule and no words, the drawing starting right
+   under it. The row stays off the stage, as every scene control does (round 2 spec §3.5), so the
+   glyph is never over the diagram. It keeps its room before the scene adopts the control (no
+   JavaScript, or before the module loads), so adopting it shifts nothing. */
+.hiw .kit-plate__bar--top {
+  justify-content: flex-end;
+  min-height: calc(44px + 0.3rem);
+  padding: 0.3rem 0.3rem 0;
+  border-bottom: 0;
+}
+
+.hiw .kit-plate__stage {
+  padding-inline: clamp(0.75rem, 1.6vw, 1.75rem);
+}
+
+/* The corner row above it is the drawing's top margin. */
+.hiw .kit-plate__bar--top + .kit-plate__stage {
+  padding-top: 0;
+}
+
+.hiw-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.hiw-svg[data-layout='wide'] {
+  display: none;
+}
+
+.hiw-svg[data-layout='tall'] {
+  max-width: 24rem;
+  margin-inline: auto;
+}
+
+@media (min-width: 64rem) {
+  .hiw-svg[data-layout='wide'] {
+    display: block;
+  }
+
+  .hiw-svg[data-layout='tall'] {
+    display: none;
+  }
+}
+
+.hiw-socket {
+  fill: var(--color-plate-raised);
+  stroke: var(--color-line-strong);
+  stroke-width: 1;
+}
+
+.hiw-icon {
+  fill: none;
+  stroke: var(--color-starlight);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hiw-label {
+  fill: var(--color-muted);
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hiw-svg[data-layout='tall'] .hiw-label {
+  font-size: 16.5px;
+}
+
+.hiw-wire {
+  fill: none;
+  stroke-width: 1.4;
+}
+
+.hiw-wire--in {
+  stroke: var(--color-line-strong);
+  stroke-dasharray: 4 5;
+}
+
+/* Two lanes that never join, in the Pipeline's colours (round 1 §6.1 rule 1). */
+.hiw-wire--measured {
+  stroke: var(--lane-measured);
+}
+
+.hiw-wire--modeled {
+  stroke: var(--enc-mean-5);
+}
+
+.hiw-gate {
+  fill: var(--color-plate-raised);
+  stroke: var(--color-ion);
+  stroke-width: 1.4;
+}
+
+/* At rest the model is lit, as mid-entrance (how-it-works.ts plays it dark → lit): step 2 reads as
+   working, beside the lit globe of step 3. */
+.hiw-edges {
+  stroke: rgb(112 230 255 / 55%);
+  stroke-width: 1;
+}
+
+.hiw-nodes {
+  fill: var(--color-ion);
+  stroke: var(--color-ion);
+  stroke-width: 1.4;
+}
+
+.hiw-cursor {
+  fill: var(--color-starlight);
+  stroke: var(--color-void);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.hiw-record path {
+  fill: none;
+  stroke: var(--color-muted);
+  stroke-width: 1.6;
+}
+
+.hiw-stud {
+  fill: var(--enc-obs);
+  stroke: var(--color-void);
+  stroke-width: 1.5;
+}
+
+.hiw .atlas-mark__studs circle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* The bottom bar: the three numbered steps. */
+.hiw .kit-plate__bar--bottom {
+  display: block;
+  padding: 0;
+}
+
+.hiw-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: hiw;
+}
+
+.hiw-step {
+  counter-increment: hiw;
+  padding: 1.2rem 1.4rem 1.4rem;
+}
+
+.hiw-step + .hiw-step {
+  border-left: 1px solid var(--color-deep-line);
+}
+
+/* The number stands level with the title's first line, so the three stay in a row when a title
+   wraps: the title starts half the difference between the number's box (1.7rem and its border)
+   and one line (1.2 × the type size) lower, just where centring put a one-line title. */
+.hiw-step h3 {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0;
+  color: color-mix(
+    in srgb,
+    var(--color-starlight) calc(var(--hiw-lit) * 100%),
+    var(--color-faint)
+  );
+  font-family: var(--font-display);
+  font-size: var(--type-h3);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.hiw-step h3::before {
+  content: counter(hiw);
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid currentColor;
+  color: color-mix(
+    in srgb,
+    var(--color-ion) calc(var(--hiw-lit) * 100%),
+    var(--color-faint)
+  );
+  font: 640 0.85rem / 1 var(--font-body);
+  letter-spacing: 0;
+}
+
+.hiw-step h3 > span {
+  margin-top: calc((1.7rem + 2px - var(--type-h3) * 1.2) / 2);
+}
+
+.hiw-step p {
+  max-width: 36ch;
+  margin: 0.55rem 0 0;
+  color: color-mix(
+    in srgb,
+    var(--color-text-soft) calc(var(--hiw-lit) * 100%),
+    var(--color-faint)
+  );
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Mid widths: the tall stage in 5 of 12 columns, the steps beside it, each level with its stage. */
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  .hiw.kit-plate {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+
+  /* Replay in the stage column's top-right corner; the steps take the full height beside both. */
+  .hiw .kit-plate__bar--top {
+    grid-area: 1 / 1;
+  }
+
+  .hiw .kit-plate__stage {
+    grid-area: 2 / 1;
+    padding: 1.25rem 1rem;
+  }
+
+  .hiw .kit-plate__bar--bottom {
+    grid-area: 1 / 2 / span 2;
+    border-top: 0;
+    border-left: 1px solid var(--color-deep-line);
+  }
+
+  /* The stage sets the height; the steps spread over it, the first by the sources, the last by
+     the globe. */
+  .hiw-steps {
+    height: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: space-between;
+  }
+
+  .hiw-step + .hiw-step {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .hiw-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hiw-step + .hiw-step {
+    border-top: 1px solid var(--color-deep-line);
+    border-left: 0;
+  }
+}
+
+/* Under reduced motion there is nothing to replay: no corner row, and the drawing takes its own
+   top margin back. */
+@media (prefers-reduced-motion: reduce) {
+  .hiw .kit-plate__bar--top {
+    display: none;
+  }
+
+  .hiw .kit-plate__bar--top + .kit-plate__stage {
+    padding-top: clamp(0.75rem, 3vw, 2.2rem);
+  }
+}
+
+/* The open-source row, under the plate. */
+.home-open {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 2.5rem;
+  margin-top: 1.75rem;
+}
+
+.home-open__line {
+  max-width: 44ch;
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: var(--type-lede);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.home-open__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-open__links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+/* ------------------------------------------------------------------- our flagship project */
+
+/* The toy globe is the band's figure (AtlasPreview.astro, atlas-preview.css). */
+.home-atlas .layout-figure-split {
+  align-items: center;
+}
+
+/* ----------------------------------------------------------------------------- join us */
+
+/* "open-source" keeps to one line in the owner's first sentence: a browser may break a compound
+   after its hyphen, and at 390, 414, 1280 and 1920 the line ended "doing open-" (final
+   verification). A no-break hyphen (U+2011) would change the sentence's characters, so the span
+   holds the compound whole instead. An inline block, not white-space: nowrap, because Chromium's
+   pretty wrapping gives up on a paragraph with a nowrap run (at 834 it left "science." alone on
+   the last line); an inline block it wraps around like a word. */
+.home-join__compound {
+  display: inline-block;
+}
+
+.home-join__figure {
+  display: grid;
+  gap: 1.6rem;
+  container: join-ways / inline-size;
+}
+
+/* Beside the two-paragraph lede, the crew and its cards stand level with the text's middle
+   (design critique 4: top-aligned, they ended about 420 px into the section and left some 240 px
+   empty beside the lede at 1440). Where the figure is the taller of the two, nothing moves. */
+@media (min-width: 60rem) {
+  .home-join__figure {
+    align-self: center;
+  }
+}
+
+/* Three cards in one row where each keeps its longest word whole; one column below that, never
+   two and one. */
+.home-join__ways {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--grid-gap);
+}
+
+@container join-ways (min-width: 40rem) {
+  .home-join__ways {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* CrewFigure.astro: decorative. The wide crew from a 34rem figure (a container query). */
+.crew {
+  position: relative;
+  margin: 0;
+  container: crew / inline-size;
+}
+
+.crew__layout {
+  position: relative;
+}
+
+/* The narrow crew stops growing at 23rem, as the people grid stops growing too: wider, its 420-unit
+   drawing drew the astronauts about 1.5 times their desktop size (up to 156 px tall at 600–1000
+   px, against 100–107 px at 1440; review of T2). At 23rem they are 100–106 px. */
+.crew__layout[data-layout='narrow'] {
+  max-width: 23rem;
+}
+
+.crew__layout[data-layout='wide'] {
+  display: none;
+}
+
+/* The caption names only the people drawn: one sentence per layout, the other hidden with it. */
+.crew__caption[data-layout='wide'] {
+  display: none;
+}
+
+@container crew (min-width: 34rem) {
+  .crew__layout[data-layout='wide'],
+  .crew__caption[data-layout='wide'] {
+    display: block;
+  }
+
+  .crew__layout[data-layout='narrow'],
+  .crew__caption[data-layout='narrow'] {
+    display: none;
+  }
+}
+
+.crew__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.crew__ledge path {
+  fill: var(--enc-land);
+  stroke: rgb(112 230 255 / 30%);
+  stroke-width: 1;
+}
+
+/* "Your spot": HTML, so it keeps its size; it sits over the outline (CrewFigure sets --x). */
+.crew__label {
+  position: absolute;
+  top: var(--y, 6%);
+  left: var(--x);
+  margin: 0;
+  translate: -50% 0;
+  color: var(--color-genome);
+  font-size: 0.9rem;
+  font-weight: 640;
+  white-space: nowrap;
+}
+
+.crew__spot {
+  transition: opacity 200ms var(--ease-ui);
+}
+
+/* A newcomer lands in the spot while a card is hovered or focused, and floats back out after. */
+.crew__newcomer {
+  opacity: 0;
+  translate: 0 -46px;
+  transition:
+    opacity 180ms var(--ease-ui),
+    translate 320ms var(--ease-camera);
+}
+
+.crew[data-filled] .crew__newcomer {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity 140ms var(--ease-ui),
+    translate 420ms cubic-bezier(0.3, 1.45, 0.55, 1);
+}
+
+.crew[data-filled] .crew__spot {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------------------- forced colours */
+
+/* Spec §8.9: the figures show their end state (the scenes are not imported, pages/index.astro) with
+   the system's text colour for every line and label that would otherwise vanish on its canvas. */
+@media (forced-colors: active) {
+  .people__ring,
+  .people__leader,
+  .hiw-wire,
+  .hiw-gate,
+  .hiw-socket,
+  .crew__ledge path {
+    stroke: CanvasText;
+  }
+
+  .hiw-label {
+    fill: CanvasText;
+  }
+
+  /* No scene, so nothing to replay: no corner row either. */
+  .hiw .kit-plate__bar--top {
+    display: none;
+  }
+
+  .hiw .kit-plate__bar--top + .kit-plate__stage {
+    padding-top: clamp(0.75rem, 3vw, 2.2rem);
+  }
+}
+
+/* ------------------------------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .button-link,
+  .arrow-link__arrow,
+  .crew__spot,
+  .crew__newcomer,
+  .crew[data-filled] .crew__newcomer {
+    transition: none;
+  }
+}

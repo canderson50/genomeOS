@@ -1,0 +1,261 @@
+---
+/**
+ * "Counts, not guesses" (round 2 spec §4.2.5; rulings R2-15, R2-16; site redesign spec §6.1 rule 2;
+ * #454): a worked example, tagged "Example", of why the Atlas stores counts. Two illustrative
+ * surveys, one micro astronaut per person tested (the kit's face variant: a seeded skin tone in the
+ * visor, the suit carrying the data), each with a Jeffreys 95% interval for the share of carriers on
+ * a shared 0–40% axis.
+ *
+ *   Survey 1   58 of 206 people carry it (55 with one copy, 3 with two: 61 of 412 gene copies)
+ *   Survey 2   0 of n people carry it, n on a slider from 10 to 500
+ *
+ * The intervals are computed here, at build time (jeffreys.ts), and shipped as a table: nothing is
+ * fitted in the browser. Server-rendered at the default stop (10), the final state, so the figure is
+ * complete without JavaScript; counts.ts adds the slider and the entrance. Each grid is one `<use>`
+ * per person of the kit's 13 face symbols (≤ 706 nodes), placed by counts.css for the wide and the
+ * narrow layout from the same nodes; survey 2 draws its people tested and, as faint dots, the
+ * people the next stop would add (counts.ts `roomAt`: 20 at the default stop), so sample size reads
+ * at rest and the tested block visibly grows, without ten people over a void of 490 dots.
+ */
+import Figure from '../kit/Figure.astro';
+import StatusTag from '../kit/StatusTag.astro';
+import {
+  microSkins,
+  microSymbols,
+  MICRO_VIEWBOX,
+} from '../../graphics/astro/micro';
+import { jeffreys } from '../../graphics/jeffreys';
+import {
+  AXIS_TICKS,
+  GLYPH,
+  ROW_2_ROOM,
+  SURVEY_1,
+  roomAt,
+  roomStyle,
+  VIEW_WIDTH,
+  buildCountsTable,
+  carrierPositions,
+  cellOf,
+  clientStop,
+  gridBox,
+  labelSide,
+  layoutUnits,
+  onAxis,
+  placeHref,
+} from './counts';
+import './counts.css';
+
+const table = buildCountsTable(jeffreys);
+const one = table.survey1;
+const [first] = table.stops;
+const last = table.stops[table.stops.length - 1];
+const clientTable = JSON.stringify({ stops: table.stops.map(clientStop) });
+
+const skins = microSkins(ROW_2_ROOM);
+const carriers = new Set(carrierPositions());
+const whole = (value: number) => value.toLocaleString('en-US');
+
+/** One `<use>` per person, with its place in both layouts (counts.css reads --c --r --n --m). */
+const person = (index: number, href: string, extra = '') => {
+  const { c, r, n, m } = cellOf(index);
+  return `<use href="${href}" width="${GLYPH.width}" height="${GLYPH.height}" style="--c:${c};--r:${r};--n:${n};--m:${m}"${extra}/>`;
+};
+
+const grid1 = Array.from({ length: SURVEY_1.tested }, (_, index) =>
+  carriers.has(index)
+    ? person(
+        index,
+        `#micro-face-carrier-${skins[index]}`,
+        ' class="cf-carrier"',
+      )
+    : person(index, `#micro-face-tested-${skins[index]}`),
+).join('');
+// Survey 2's places: all 500 exist; those past the next stop's room are not drawn.
+const room = roomAt(0);
+const grid2 = Array.from({ length: ROW_2_ROOM }, (_, index) =>
+  person(
+    index,
+    placeHref(index < first.tested, skins[index]),
+    ` data-s="${skins[index]}"${index < room ? '' : ' data-off'}`,
+  ),
+).join('');
+
+const box1 = gridBox(SURVEY_1.tested);
+const box2 = gridBox(ROW_2_ROOM);
+// The layouts' pitches, set once on each grid for counts.css.
+const units =
+  `--px:${layoutUnits.wide.pitchX}px;--py:${layoutUnits.wide.pitchY}px;--ps:${layoutUnits.wide.scale};` +
+  `--nx:${layoutUnits.narrow.pitchX}px;--ny:${layoutUnits.narrow.pitchY}px;--ns:${layoutUnits.narrow.scale}`;
+const gridStyle = (box: ReturnType<typeof gridBox>) =>
+  `${units};--wide-h:${box.height.wide};--narrow-h:${box.height.narrow};--wide-rows:${box.rows.wide};--narrow-rows:${box.rows.narrow}`;
+const roomCss = Object.entries(roomStyle(room))
+  .map(([name, value]) => `${name}:${value}`)
+  .join(';');
+
+// Bar 1 grows out from its mean.
+const origin = ((one.mean - one.lo) / (one.hi - one.lo)) * 100;
+const bar1 = `--lo:${onAxis(one.lo)};--hi:${onAxis(one.hi)};--mean:${onAxis(one.mean)};--origin:${origin.toFixed(2)}%`;
+const bar2 = `--lo:0%;--hi:${onAxis(first.hi)};--origin:0%`;
+const tick = (value: number) => `${Math.round(value * 100)}%`;
+// The page's island (projects.astro) starts this figure with initCounts (counts.ts).
+---
+
+<Figure
+  graphic="counts"
+  interactive
+  label="Two example surveys, one figure per person tested, each with the share of carriers it could plausibly have"
+  class="cf"
+>
+  <StatusTag slot="toolbar" kind="worked-example" />
+
+  <div class="cf-stage" data-counts={clientTable}>
+    <svg class="cf-defs" aria-hidden="true" focusable="false">
+      <defs set:html={microSymbols('face')} />
+    </svg>
+
+    <div class="cf-row" data-row="1">
+      <p class="cf-row__label" aria-hidden="true">
+        <strong>Survey 1</strong>
+        <span
+          ><b>{one.carriers}</b> of <b>{whole(one.tested)}</b> people carry it</span
+        >
+      </p>
+      <p class="visually-hidden">{one.sentence}</p>
+      <svg
+        class="cf-grid"
+        data-grid="1"
+        viewBox={`0 0 ${VIEW_WIDTH} ${box1.height.narrow}`}
+        preserveAspectRatio="xMinYMin slice"
+        style={gridStyle(box1)}
+        aria-hidden="true"
+        focusable="false"
+        set:html={grid1}
+      />
+      <div
+        class="cf-bar"
+        data-bar="1"
+        data-side={labelSide(one.hi)}
+        style={bar1}
+        aria-hidden="true"
+      >
+        <span class="cf-bar__track"></span>
+        <span class="cf-bar__range"></span>
+        <span class="cf-bar__mean"></span>
+        <span class="cf-bar__value">{one.range}</span>
+      </div>
+    </div>
+
+    <div class="cf-row" data-row="2">
+      <p class="cf-row__label" aria-hidden="true">
+        <strong>Survey 2</strong>
+        <span
+          ><b>0</b> of <b data-count-n>{whole(first.tested)}</b> people carry it</span
+        >
+      </p>
+      <p class="visually-hidden" data-row-sentence="2">{first.sentence}</p>
+      <svg
+        class="cf-grid"
+        data-grid="2"
+        viewBox={`0 0 ${VIEW_WIDTH} ${box2.height.narrow}`}
+        preserveAspectRatio="xMinYMin slice"
+        style={`${units};${roomCss}`}
+        aria-hidden="true"
+        focusable="false"
+        set:html={grid2}
+      />
+      <div
+        class="cf-bar"
+        data-bar="2"
+        data-side={labelSide(first.hi)}
+        style={bar2}
+        aria-hidden="true"
+      >
+        <span class="cf-bar__track"></span>
+        <span class="cf-bar__range"></span>
+        <span class="cf-bar__value">{first.range}</span>
+      </div>
+      <p class="cf-axis" aria-hidden="true">
+        {AXIS_TICKS.map((value) => <span>{tick(value)}</span>)}
+      </p>
+      <div class="cf-slider">
+        <label for="cf-slider"
+          >People tested <span class="visually-hidden">in survey 2</span></label
+        >
+        <input
+          id="cf-slider"
+          class="kit-range"
+          type="range"
+          min="0"
+          max={table.stops.length - 1}
+          step="1"
+          value="0"
+          aria-valuetext={first.valuetext}
+        />
+        <span class="cf-slider__ends" aria-hidden="true">
+          <span>{whole(first.tested)}</span>
+          <span>{whole(last.tested)}</span>
+        </span>
+      </div>
+      <output class="cf-output" for="cf-slider">{first.output}</output>
+    </div>
+  </div>
+
+  <Fragment slot="legend">
+    <ul class="cf-key">
+      <li>
+        <svg viewBox={MICRO_VIEWBOX} aria-hidden="true" focusable="false"
+          ><use href="#micro-face-carrier-s3"></use></svg
+        >Carrier
+      </li>
+      <li>
+        <svg viewBox={MICRO_VIEWBOX} aria-hidden="true" focusable="false"
+          ><use href="#micro-face-tested-s3"></use></svg
+        >Not a carrier
+      </li>
+      <li>
+        <svg viewBox={MICRO_VIEWBOX} aria-hidden="true" focusable="false"
+          ><use href="#micro-untested"></use></svg
+        >Not tested
+      </li>
+    </ul>
+  </Fragment>
+  <Fragment slot="footnote"
+    >Illustrative surveys; 95% Jeffreys intervals.</Fragment
+  >
+  <table slot="table">
+    <caption class="visually-hidden">
+      Carriers among the people each example survey tested
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col">Survey</th>
+        <th scope="col">People tested</th>
+        <th scope="col">Carriers</th>
+        <th scope="col">Gene copies with the variant</th>
+        <th scope="col">Plausible share of carriers (95%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Survey 1</td>
+        <td>{whole(one.tested)}</td>
+        <td>
+          {one.carriers} ({one.oneCopy} with one copy, {one.twoCopies} with two)
+        </td>
+        <td>{one.copies} of {whole(one.geneCopies)}</td>
+        <td>{one.range}</td>
+      </tr>
+      {
+        table.stops.map((stop) => (
+          <tr>
+            <td>Survey 2</td>
+            <td>{whole(stop.tested)}</td>
+            <td>0</td>
+            <td>0 of {whole(2 * stop.tested)}</td>
+            <td>{stop.range}</td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</Figure>
