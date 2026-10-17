@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-10-17T19:28:41Z",
+  "upstream": "genomeOS/genomeOS",
+  "upstream_default_branch": "main",
+  "upstream_main_sha": "8090479862fc8c306ade2393259e603eb6eb99ad",
+  "board": "https://github.com/orgs/genomeOS/projects/1",
+  "issues": 265,
+  "pull_requests": 207,
+  "ready": 0
+}
