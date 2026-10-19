@@ -59,6 +59,8 @@ ENDPOINTS = (
     ("/v2/pods/{id}", "delete"),
     ("/v2/catalog/gpus", "get"),
 )
+#: Hard per-pod wall-clock cap, set by canderson50 (raised from 120 to 180 on 2026-10-19).
+MAX_MINUTES = 180
 LEDGER_HEADER = "date\tpod\tgpu\tusd_per_hr\tminutes\tusd\tsha\texit\tnote\n"
 REACH_MINUTES = 12  # abandon a pod whose results endpoint never answers within this long
 GONE = {"EXITED", "ERROR", "TERMINATED"}
@@ -409,8 +411,8 @@ def main() -> int:
     parser.add_argument("--out", type=pathlib.Path, default=pathlib.Path("gpu-results"))
     parser.add_argument("command", nargs="*")
     args = parser.parse_args()
-    if args.minutes > 120:
-        raise Refusal("--minutes may not exceed 120")
+    if args.minutes > MAX_MINUTES:
+        raise Refusal(f"--minutes may not exceed {MAX_MINUTES}")
     if args.action == "check":
         check(args.gpu)
         return 0
