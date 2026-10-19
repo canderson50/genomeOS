@@ -1,0 +1,194 @@
+---
+/**
+ * The privacy page (#422; site redesign spec §4.5, #454): what Google Analytics 4 collects on
+ * genome-os.org, which cookies it sets and when (opt-in in the EEA, the UK, Switzerland, Quebec
+ * and Turkey; opt-out elsewhere, with Global Privacy Control honoured), how long they and the data
+ * last, and how to change the choice.
+ *
+ * It opens on the "What leaves your browser" figure, drawn in the visitor's own consent state, and
+ * then lists every disclosure in a two-column ledger (term | detail). The figure's chips carry
+ * the lists, so the ledger says each thing once. Every build publishes the page; a build without
+ * analytics (the /genomeOS/ fallback, local dev) says so first and draws the gate removed.
+ */
+import BrandName from '../components/BrandName.astro';
+import CookieSettings from '../components/CookieSettings.astro';
+import PageIntro from '../components/PageIntro.astro';
+import PrivacyFlow from '../components/privacy/PrivacyFlow.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { gaMeasurementId } from '../lib/ga.mjs';
+import '../styles/pages/privacy.css';
+
+const analytics = gaMeasurementId() !== null;
+const external = { target: '_blank', rel: 'noopener noreferrer' };
+---
+
+<SiteLayout
+  title="Privacy"
+  description="How genome-os.org uses Google Analytics, which cookies it sets and when, and how to change your choice."
+>
+  <div class="privacy-lead" data-concept="what-leaves-your-browser">
+    <PageIntro
+      layout="split"
+      note="Privacy"
+      title="What we measure, and what we don't."
+      lede="Google Analytics shows us which pages and Atlas datasets people use, so we can improve them. No ads, and never what you view on the map."
+    >
+      <PrivacyFlow slot="figure" />
+    </PageIntro>
+  </div>
+
+  <section class="disclosure" aria-labelledby="disclosure-title">
+    <div class="section-shell disclosure__inner">
+      <h2 class="visually-hidden" id="disclosure-title">The disclosures</h2>
+      {
+        !analytics && (
+          <article
+            data-no-analytics
+            class="disclosure__row disclosure__row--notice"
+          >
+            <p class="disclosure__term">This copy of the site</p>
+            <p class="disclosure__detail">
+              This copy of <BrandName /> loads no analytics and sets no cookies.
+              The rest of this page describes genome-os.org, which does.
+            </p>
+          </article>
+        )
+      }
+      <dl class="disclosure__list">
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Cookies</dt>
+          <dd class="disclosure__detail">
+            Google Analytics 4 sets two first-party cookies, <span
+              class="disclosure__name">_ga</span
+            > and <span class="disclosure__name">_ga_&lt;container&gt;</span>,
+            which tell one visit from the next. Each lasts up to two years
+            unless you turn analytics off.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Who is asked first</dt>
+          <dd class="disclosure__detail">
+            <strong
+              >European Economic Area, UK, Switzerland, Quebec and Turkey:
+              opt-in.</strong
+            >{' '}
+            This includes the EU’s overseas regions, Åland, the Channel Islands, the
+            Isle of Man and Gibraltar. Devices set to Eastern Time in Canada, which
+            covers Ontario as well as most of Quebec, are asked too. Until you choose{
+              ' '
+            }
+            <strong>Accept</strong>, the site doesn’t load Google Analytics, so
+            nothing is sent to Google. Visitors in these time zones see a short
+            Accept or Decline prompt on their first visit.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Cookieless pings</dt>
+          <dd class="disclosure__detail">
+            If Google places you in these regions but your device is set to a
+            time zone elsewhere, Google Analytics loads without setting cookies
+            and sends cookieless pings, which Google uses only to estimate
+            totals, until you choose.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Everywhere else</dt>
+          <dd class="disclosure__detail">
+            <strong>Everywhere else: opt-out.</strong>{' '}
+            The cookies are set by default unless you turn them off, or your browser
+            sends a <a href="https://globalprivacycontrol.org/" {...external}
+              >Global Privacy Control</a
+            >{' '}
+            signal, which we honour as an opt-out.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Where your choice lives</dt>
+          <dd class="disclosure__detail">
+            Your choice is kept in your browser’s local storage, not in a
+            cookie, on every page until you change it. While analytics is off,
+            pages don’t load Google Analytics, and turning it off removes its
+            cookies.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Collected</dt>
+          <dd class="disclosure__detail">
+            Only what the figure shows. Paths and linking pages lose their
+            query, and your approximate location (city, region, country) comes
+            from your IP address; Google Analytics 4 does not log or store IP
+            addresses.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Atlas actions</dt>
+          <dd class="disclosure__detail">
+            Three, by public name only: which dataset is opened (only once you
+            have chosen <strong>Accept</strong> or turned analytics on yourself, wherever
+            you are, because a dataset can hint at a health interest); switches between
+            globe, map and perspective views; and which inspector is opened. Never
+            the places you look at or click.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">How long</dt>
+          <dd class="disclosure__detail">
+            Google Analytics keeps this visit-level data for two months, then
+            deletes it; only aggregate reports are kept.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Not collected</dt>
+          <dd class="disclosure__detail">
+            No advertising or ad personalisation. Google signals are off, so
+            visits are not linked to Google accounts or across devices. No names
+            or accounts.
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Map imagery</dt>
+          <dd class="disclosure__detail">
+            Map imagery and the Atlas’s optional data lookups load straight from
+            their providers, such as OpenStreetMap and Cesium ion, under their
+            own policies.
+          </dd>
+        </div>
+        <div class="disclosure__row" id="your-choice">
+          <dt class="disclosure__term">Change your choice at any time</dt>
+          <dd class="disclosure__detail">
+            <p>
+              Every page has a small cookie icon in a bottom corner. In the
+              Atlas it sits under the map controls on a wide screen, and at the
+              end of the data credits on a phone. It opens your cookie settings,
+              with a switch for analytics cookies. The footer’s <strong
+                >Cookie settings</strong
+              > link opens the same panel. Blocking Google Analytics in your browser
+              or content blocker also stops it; the site works the same without it.
+            </p>
+            {
+              analytics && (
+                <p class="disclosure__action">
+                  <CookieSettings class="privacy-cookie-settings" />
+                </p>
+              )
+            }
+          </dd>
+        </div>
+        <div class="disclosure__row">
+          <dt class="disclosure__term">Who runs it</dt>
+          <dd class="disclosure__detail">
+            Google runs the service, and the <BrandName /> maintainers see only its
+            aggregate reports. Google’s <a
+              href="https://policies.google.com/privacy"
+              {...external}>privacy policy</a
+            > and its page on <a
+              href="https://policies.google.com/technologies/partner-sites"
+              {...external}
+              >how Google uses information from sites that use its services</a
+            > apply to it.
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+</SiteLayout>

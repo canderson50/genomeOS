@@ -1,6 +1,9 @@
 /** Complete client explorer and load state machine for Atlas design §11. */
 
-import 'cesium/Build/Cesium/Widgets/widgets.css';
+// The globe is a CesiumWidget in Viewer's frame (scene/globe-widget.ts, issue #446): its own CSS,
+// then the frame and credit-row rules, in widgets.css order. No other widget CSS ships.
+import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
+import 'cesium/Build/Cesium/Widgets/Viewer/Viewer.css';
 import '../../styles/atlas.css';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -43,6 +46,7 @@ import {
   type StateCorrection,
 } from '../../atlas/url-state';
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
+import { AtlasCookieSettings } from './AtlasCookieSettings';
 import { AtlasDataCredit } from './AtlasDataCredit';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus } from './AtlasStatus';
@@ -53,10 +57,12 @@ import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 import { PanelSheet } from './PanelSheet';
 import { useArtifactPipeline } from './useArtifactPipeline';
 import { nextPaint, useAtlasActivity } from './useAtlasActivity';
+import { useAtlasAnalytics } from './useAtlasAnalytics';
 import { EscapeStackProvider } from './useEscapeStack';
 import { ExplorerPanelsProvider } from './useExplorerPanels';
 import { useObservationPlaces } from './useObservationPlaces';
 import { useAtlasSceneLifecycle } from './useAtlasSceneLifecycle';
+import { useGlobeOffset } from './useGlobeOffset';
 import {
   useAtlasDataProvider,
   useContextSourceUrls,
@@ -124,6 +130,7 @@ export default function AtlasExplorer({
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [explorerNode, setExplorerNode] = useState<HTMLDivElement | null>(null);
   const [topSlot, setTopSlot] = useState<HTMLDivElement | null>(null);
+  const [controlsPanel, setControlsPanel] = useState<HTMLElement | null>(null);
   const {
     activity,
     begin: beginActivity,
@@ -206,6 +213,13 @@ export default function AtlasExplorer({
       return null;
     return nearestPlaceContext(candidate.value, placeCatalog);
   };
+  // #422: the inspector counts as open exactly when the PanelSheet below renders it.
+  useAtlasAnalytics({
+    catalog,
+    entityId: state?.entityId,
+    inspector: inspectorArtifact && selection ? selection.kind : undefined,
+    view: state?.view,
+  });
   useEffect(() => atlasWorker().onCrash(() => setWorkerCrashed(true)), []);
 
   useEffect(() => {
@@ -216,9 +230,18 @@ export default function AtlasExplorer({
     return () => media.removeEventListener('change', updatePreference);
   }, []);
 
+  // #452: the desktop globe is drawn centred in the open area beside the controls panel.
+  const coveredLeft = useGlobeOffset(
+    controlsPanel,
+    sceneElement,
+    sceneController,
+  );
+
   const sceneGeneration = useAtlasSceneLifecycle({
     attempt: sceneAttempt,
     bind: (controller) => {
+      // Before its first frame, so the globe starts beside the controls panel (#452).
+      controller.setLeftObstruction(coveredLeft());
       setSceneController(controller);
       setCapabilities(controller.capabilities());
       const removePick = controller.onPick((pick) => {
@@ -601,6 +624,7 @@ export default function AtlasExplorer({
               state={state}
               disabled={false}
               explorer={explorerNode}
+              panelRef={setControlsPanel}
               topSlot={topSlot}
               onEntity={chooseEntity}
               onExternalInfo={(source, signal) => {
@@ -751,6 +775,7 @@ export default function AtlasExplorer({
             )}
           </PanelSheet>
           <AtlasDataCredit />
+          <AtlasCookieSettings placement="corner" />
         </div>
       </ExplorerPanelsProvider>
     </EscapeStackProvider>

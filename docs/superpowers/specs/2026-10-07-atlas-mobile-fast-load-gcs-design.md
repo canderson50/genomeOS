@@ -171,7 +171,9 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
      the A.1.9 Escape stack, whose listener calls `preventDefault()` and `stopPropagation()`),
      which it lacks today (interaction design §9.2).
    - **Credit block** — Cesium's `bottomContainer` stays inside `.atlas-scene` (Viewer.resize writes
-     inline left/bottom/right, so placement rules keep `!important`); on mobile it and the data
+     inline left/bottom/right, so placement rules keep `!important`; amended under #446: the globe
+     is a `CesiumWidget`, and `scene/globe-widget.ts` builds the same `.cesium-viewer` frame and
+     `.cesium-viewer-bottom` container and writes the same inline offsets); on mobile it and the data
      credit form one wrapping block (not limited to one line): the ion logo at its native size plus
      map credits, then the data credit as a short link "Data: genomeOS" at the same 10 px size.
      `.atlas-data-credit` is re-enabled at ≤ 52rem (hidden today). Its height is measured with a
@@ -215,6 +217,43 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
     24 px target boxes (A.1.10), the legend Escape handling, the Escape stack, the header-height
     flex layout (−1 px explorer height) and the empty top slot. Desktop axe, keyboard and existing
     tests keep passing.
+
+    (Amended 2026-10-13 under #452, whose design the owner approved: one more desktop delta. The
+    controls panel floats over the left of the full-width canvas, so the globe is drawn centred in
+    the open area to its right. The camera's frustum shifts its projection centre right by half the
+    canvas width the panel covers, measured as the panel's right edge minus the canvas's left edge;
+    the camera itself does not move, so the URL view, fly-to, zoom, the keyboard controls and every
+    pick keep their meaning. The shift is 0 while the panel is hidden and in the phone layout, where
+    the panel is a bottom sheet, and it follows any resize of the panel or the canvas. Only the
+    persistent controls panel counts; the inspector and the other transient panels do not move the
+    globe, so at 1280 px an open inspector (from about 844 px) covers the globe's centre (874 px),
+    which it clears above about 1,340 px. The flat map (2D) keeps Cesium's centred orthographic
+    frustum. The island measures the panel (`useGlobeOffset`) and passes the covered width through
+    `AtlasSceneController.setLeftObstruction`, first when a scene is bound, before its first frame,
+    so the globe never starts at the canvas centre; the scene never reads the explorer's DOM. Cesium
+    1.145 does not carry `PerspectiveFrustum.xOffset` through a frame, and `scene/globe-offset.ts`
+    closes each gap it leaves: a frustum subclass keeps the shift a fixed fraction of its width at
+    every near plane Scene renders with and through the clones Scene and picking make
+    (`PerspectiveFrustum.clone` drops `xOffset`); `Camera.getPickRay` is cast through the point
+    drawn under the pointer; pick passes cull to the sub-frustum behind their own scissor rectangle
+    instead of a volume centred as if unshifted (offscreen ray picks, which render through their own
+    camera, keep Cesium's); the globe's per-fragment ground atmosphere rebuilds its view ray from
+    the frustum planes instead of assuming a centred frustum (unpatched, it painted the far limb
+    white); and `ScreenSpaceCameraController`, which takes the canvas centre
+    for the view axis (its zoom to the cursor above 1,000 km drifted the ground under the cursor 25
+    to 45 px per wheel notch towards the panel), runs each update in the frame of a centred view, so
+    zoom, drag, tilt and its pivots behave exactly as on a centred globe (§B.7 "camera pivot
+    behaviour" holds relative to the drawn globe). Reveal ordering starts from the centre of the
+    open area. Rejected: starting the canvas to the right of the panel, which loses the full-bleed
+    starfield behind the translucent panel and moves the credits and the legend; and turning the
+    camera, which moves the map's content rather than the globe. Tests: unit tests for the offset
+    arithmetic (visible, hidden, phone, resize) and for each Cesium gap against real Cesium objects;
+    Playwright measures the globe's disc on desktop (centred in the open area, back at the canvas
+    centre with the panel hidden, following a resize) and on phones (unchanged), opens the inspector
+    on the known cell under the camera by hovering and clicking where it is drawn (from 1,000 km,
+    and from 8,000 km flat and elevated, where a pick culled as if unshifted misses the fixture's
+    cells), and wheel-zooms there without the cell leaving the cursor. The install refuses a Cesium
+    that lacks a method it overrides and leaves the scene as it was.)
 
 ### A.2 Code organisation
 
@@ -378,26 +417,37 @@ All 30 published surfaces share one sorted, unique 77,844-cell H3 resolution-4 g
 rendition splits into immutable, content-addressed binary objects. **Normative per-tier columns**
 (name, dtype, encoding, in this order):
 
-| Tier     | Columns                                                                                                                     | HbS raw / gzip    | Fetched                   |
-| -------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------- |
-| `grid`   | `h3` u64 `delta_shuffle`                                                                                                    | 623 KB / ~15 KB   | once per session          |
-| `render` | `support` u8 `raw`; `post_mean` f32 `shuffle`; `post_sd` f32 `shuffle`                                                      | 700 KB / ~433 KB  | on selection (critical)   |
-| `detail` | `post_mean`, `post_sd`, `q025`, `q975`, `posterior_contraction`, `dist_nearest_obs_km` — all f64 `shuffle`, in that order | 3.7 MB / ~3 MB    | after reveal, low priority |
+| Tier     | Columns                                                                                                                     | HbS raw / gzip    | Fetched                                  |
+| -------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------- |
+| `grid`   | `h3` u64 `delta_shuffle`                                                                                                    | 623 KB / ~15 KB   | once per session                         |
+| `render` | `support` u8 `raw`; `post_mean` f32 `shuffle`; `post_sd` f32 `shuffle`                                                      | 700 KB / ~433 KB  | on selection (critical)                  |
+| `detail` | `post_mean`, `post_sd`, `q025`, `q975`, `posterior_contraction`, `dist_nearest_obs_km` — all f64 `shuffle`, in that order | 3.7 MB / ~3 MB    | after the borders, low priority (§B.6.9) |
 
-- **Render values drive colour, height and bins only; they are never displayed as numbers.** Every
-  number the hover preview or inspector shows comes from the f64 detail tier, bit-identical to the
-  published artifact. Two accessors make this a type guarantee:
+- **Render values drive colour, height and bins; they are displayed as numbers only when marked
+  provisional.** Every unmarked number the hover preview or inspector shows comes from the f64
+  detail tier, bit-identical to the published artifact. Two accessors make this a type guarantee:
   `renderAt(row) → { h3, support, post_mean, post_sd }` (render tier; used by heights, highlight,
-  observation anchors, Natural Earth heights) and `cellAt(row) → SurfaceCell` (detail tier; throws
-  if not loaded; the only source for `HoverPreview` and `InspectorPanel` values). Heights always
-  come from the render tier, even after the detail tier loads (`heightFor(supportCode, value,
-  domain, exaggeration)` replaces `heightForCell(SurfaceCell, …)`), so highlight and anchors stay
-  bit-consistent with the worker mesh.
-- Before the detail tier loads, hover and the inspector show the cell id, the support label (exact,
-  from the u8 column; Cesium design §8.4) and "Loading cell values…", never a number. If the detail
-  tier fails or stalls (15 s stall timeout), they show "Cell values unavailable" with a retry. If it
-  fails its checksum or validation, the artifact's surface and support layers are removed, the map is
-  marked not ready, and the validation error appears with "Retry data" (Cesium design §12).
+  observation anchors, Natural Earth heights and the provisional readout below) and
+  `cellAt(row) → SurfaceCell` (detail tier; throws if not loaded; the only source of exact
+  `HoverPreview` and `InspectorPanel` values). The cell view wraps the render values in
+  `ProvisionalCellValues`, whose members are opaque rather than `number`, so neither the exact
+  formatter nor JSX accepts one; the only way to print one is `provisionalPercent`, which always
+  adds "≈". Heights always come from the render tier, even after the detail tier loads
+  (`heightFor(supportCode, value, domain, exaggeration)` replaces `heightForCell(SurfaceCell, …)`),
+  so highlight and anchors stay bit-consistent with the worker mesh.
+- Before the detail tier loads, hover and the inspector show the render tier's mean and SD as
+  provisional numbers: "≈" before the exact readout format (percent, two decimals), and in the
+  inspector a visually hidden note after each, "approximate; exact value loading". The 95% credible
+  interval and the nearest-measurement distance, which only the detail tier has, show "Loading…".
+  The inspector also shows the cell id, the support label (exact, from the u8 column; Cesium design
+  §8.4) and its "Loading cell values…" status; the hover shows the support label. A support code
+  shows a provisional number wherever it would show the exact one (today the mean and SD show for
+  all four codes). When the detail tier arrives, both show the exact values, unmarked, as before. If
+  the detail tier fails or stalls (15 s stall timeout), the provisional numbers stay, with the note
+  "approximate; exact value unavailable"; the interval and distance show "Unavailable"; and "Cell
+  values unavailable" appears, with a retry in the inspector. If it fails its checksum or
+  validation, the artifact's surface and support layers are removed, the map is marked not ready,
+  and the validation error appears with "Retry data" (Cesium design §12).
 - **Cross-tier binding** (worker, O(n)): `Math.fround(detail.post_mean[i]) === render.post_mean[i]`
   and the same for `post_sd`; the decoded support histogram equals the catalog ref's
   `support_counts`. Either failing is a validation failure as above. Render and detail headers carry
@@ -407,6 +457,16 @@ rendition splits into immutable, content-addressed binary objects. **Normative p
   object (AGENTS: observations and surfaces never conflated).
 - `posterior_contraction` is kept in the detail tier although no UI reads it: the surface contract
   requires it and AGENTS forbids omitting an uncertainty column.
+
+(Amended 2026-10-13 under #444: the first two bullets. Before, the render tier was never displayed,
+and until the ~3 MB detail tier arrived the hover and inspector showed no number. At the readout's
+precision the f32 values almost always print the f64 digits. Each of the 30 published surfaces has
+77,844 cells, and each cell has a mean and an SD, so there are 77,844 × 2 × 30 = 4,670,640
+readouts. Of these, 77 differ, each by one unit in the last digit (0.01 percentage points); the
+largest raw difference is 3.0 × 10⁻⁶ percentage points. That is close enough to show while the
+detail tier loads, but not as the published number, so the "≈" marker and the type separation keep
+a provisional value from being read or cited as exact. In this state the hover drops the cell id it
+showed before and takes the same rows as the exact preview, so the swap changes only the numbers.)
 
 ### B.3 Container format `GOSA`, version 1
 
@@ -502,6 +562,14 @@ when `observations_available` is true and `null` otherwise, mirroring `observati
   `null` (indeterminate) otherwise. The `Content-Length`/`Content-Encoding` heuristic in
   `static-provider.ts` is deleted: cross-origin, `Content-Encoding` is hidden while `Content-Length`
   (the compressed size) stays visible, so header totals are wrong, not merely missing.
+- **Format version** (amended 2026-10-17, #467). The catalog's `schema_version: 1` is replaced by
+  `format_version: "MAJOR.MINOR"` (`"1.0"`), the version of the whole Python→web data format. The
+  client refuses another MAJOR (`AtlasFormatVersionError`, build and runtime) and reads a newer
+  MINOR with unknown catalog keys ignored. Python writers emit exactly the current version, and
+  `web_layout` refuses a MAJOR or newer MINOR it can't enumerate. A missing version is refused,
+  never defaulted. The GOSA and GOBD u16 slots and the JSON `schema_version`s are unchanged and
+  pinned by the format MAJOR, so no published object is rewritten. Rules and the bump procedure are
+  in `docs/web-data-format.md`.
 - **Keys** are relative paths validated by zod: `^[a-z0-9][a-z0-9._/-]*$`, no `..` segment, no
   leading `/`, no scheme. A violation fails the build (app.astro validates at build time).
 - **Two bases** (B.6.1): `artifactDataBase` resolves `grids.*.url`, `web.render.url`,
@@ -596,7 +664,7 @@ AtlasDataProvider (main thread)  ── fetch (matches preloads; stall timeout; 
                                    verify sha256 → decode/validate (B.3) → cross-tier checks (B.2)
                                    topology as soon as the grid arrives (cached per grid)
                                    per chunk, camera order: surface mesh + support (mask) buffers
-                                   edges ring buffers; Natural Earth parse; observation anchor heights
+                                   edges ring buffers; Natural Earth decode; observation anchor heights
                                  ◄── transferable typed arrays, one message per chunk
 scene (when import resolves) ── observations → chunk scheduler (B.6.7) → edges, context (deferred)
 ```
@@ -623,7 +691,8 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    `crossorigin="anonymous"`) and transfers each `ArrayBuffer`. A **stall timeout** (15 s without a
    new body chunk) replaces the 15 s whole-request budget; abort and retry are otherwise unchanged.
    Each tier is fetched at its preload's priority (observations `high`, grid and render `low`), and
-   the detail tier with `priority: 'low'` after `atlas:surface-visible`.
+   the detail tier with `priority: 'low'` after `atlas:surface-visible`, once the borders' bytes
+   have arrived (the post-reveal load order, §B.6.9).
 3. **Worker.** One dedicated module worker
    (`new Worker(new URL('./atlas-data.worker.ts', import.meta.url), { type: 'module' })`; Vite
    `worker.format: 'es'`; no dynamic `import()` inside it). Typed request/response messages with ids;
@@ -716,6 +785,86 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    chunk per frame; add the next batch only after the previous batch's primitives report `ready` (or
    its postRender fired). Order: nearest to the camera's look-at point first. Seam chunks are budgeted
    as costly.
+
+   (Amended 2026-10-13 for #453, the reveal wave, as the owner approved it. On desktop the chunked
+   reveal finished in about 0.35 s and read as one pop, so the surface now appears as a wave. It is
+   cosmetic: the scheduler, its budgets and every load mark keep their meaning, and nothing waits
+   for the wave.
+   - **Shape.** A ring spreads from the wave's origin to the horizon. Each cell grows from its own
+     centre, scaled from nothing to full size at its own height, and fades in while the ring
+     passes over it. Smooth modes (`triangles`, `honmoon`, `honmoon-fill`) fade per vertex
+     instead, a radial fade. The ring is timed on screen (amended 2026-10-14): its on-screen
+     radius grows at one speed from the origin to the limb plus one ring width (20% of the
+     on-screen distance covered), easing out only over the last fifth of `REVEAL_WAVE_MS` (1 s,
+     the one tunable constant), so every visible cell is grown when the time is up; the far side
+     then finishes at once. Each frame turns the ring's on-screen edge and width back into angles
+     through the globe's perspective, for a camera at its actual distance from the origin; the
+     map frame (2D and Columbus view) uses the angle itself. When the globe fills the view, the
+     wave runs only to the farthest point of the view's edge. Cells lifted by elevation that show
+     past the horizon are included: past the limb the ring carries on as the projection's mirror
+     image about the horizon, and what it has not reached finishes with the wave.
+   - **Origin.** Where the camera's view ray meets the ellipsoid (with a frustum offset, the centre
+     of the open area), else the point below the camera. In 2D and Columbus view it is the
+     camera's ellipsoid pick at the view centre, where the view axis is drawn: the canvas centre,
+     moved right in Columbus view by the desktop globe offset of §A.1.13 (#452); 2D keeps a centred
+     frustum.
+   - **GPU only.** The surface and mask shaders read three uniforms (origin, leading-edge radius,
+     ring width) from one shared state on every draw. The driver moves them each frame, requests
+     a render while the ring moves, and stops requesting renders and unsubscribes when the wave is
+     done. Nothing is rebuilt or downloaded for it, and no per-cell buffer is written (#451). At
+     rest the wave is complete, and the shaders skip the per-vertex angle.
+   - **Cell centres.** No existing attribute holds a vertex's cell centre (`elevationNormal` and
+     the shading normals of flat cells are per-vertex directions). Flat surface chunks (`hexagons`,
+     `extruded`) and the support masks therefore carry one float32 ECEF cell centre per vertex
+     (`cellCentre`); smooth chunks carry none. On the full HbS grid this adds 1.39 MB to the
+     masks (5.68 to 7.06 MB), so the default `triangles` load pays only that; it adds 5.15 MB to
+     `hexagons` surfaces (+16%) and 22.8 MB to `extruded` ones (+17%), and a few milliseconds of
+     worker time per mode over all chunks. Growth uses the vertex's ECEF offset from its cell
+     centre on the globe. In 2D and Columbus view it uses that offset linearised for the geographic
+     projection at the cell centre; a cell within about 3° of a pole only fades there.
+   - **Clock.** The wave's clock starts at the end of its first drawn frame, which may compile
+     shaders and upload the first chunk. It sums frame times, but one frame moves it by at most a
+     quarter of the wave. Two stalls that predate the wave (a 0.6–0.8 s Cesium frame at
+     `atlas:ready`, and a gap of about 0.6 s in frames right after a dataset switch commits) would
+     otherwise swallow most of it, so the ring would freeze and then pop to the end. The wave ends
+     at the frame where the ring has passed the horizon. The User Timing measure `atlas:reveal-wave`
+     spans the two in wall-clock time, and the cold-load harness reports it. `data-atlas-wave` on
+     `.atlas-explorer` reads `pending` until the scene's first wave, then `running` or `done`. A
+     cold reveal whose stream ends with no chunk added (a surface with no supported cell) starts no
+     wave, so it reads `done` when the stream ends (amended 2026-10-14); otherwise anything waiting
+     for `done` would wait for ever.
+   - **Overlays.** The support masks grow and fade with the surface, cell by cell. Cell outlines
+     cannot follow on the GPU: the buffer polyline shader is fixed, and following ring by ring would
+     mean per-cell buffer writes. They are therefore held hidden while a wave runs, and they are
+     built only once it has passed. A hidden collection is not updated, so rings added under the
+     wave would all be packed in the one frame that shows them. `edges-ready` keeps its meaning
+     (outlines built) and comes after the wave.
+   - **Picking.** An unreached flat cell collapses to its axis, so it draws no fragment in any pass.
+     Cesium's pick shader reuses the vertex shader and discards alpha 0, so the cell cannot be picked.
+     The scene's cell resolver also returns no cell the wave has not reached. A 3 × 3 pick window
+     can catch a grown neighbour's chunk, and the extruded ray test can choose an unreached
+     neighbour's prism.
+   - **Reduced motion and hidden tabs.** `prefers-reduced-motion: reduce` runs no wave: everything
+     shows at once, as before. A tab hidden mid-wave finishes the wave at once, and a wave started
+     in a hidden tab never runs, so the page comes back to the whole surface.
+   - **Tests.** E2E builds alone may hold the wave at a progress (`window.__atlasRevealWaveHold`,
+     enabled by `PUBLIC_ATLAS_E2E_HOOKS=1`, which only `npm run build:e2e` may set), so browser
+     tests can sample a frame mid-wave. They also report the camera's motion
+     (`window.__atlasCameraMotion`: a flight the scene started is under way, or Cesium has raised
+     `moveStart` and no `moveEnd` since), so a test that compares frames of one view waits out the
+     flight to a linked camera on the camera's own state (amended 2026-10-14). Two screenshots
+     cannot stand in for it: each waits for several frames, and on CI's software WebGL the page
+     then drew a frame only every 1–1.5 s.)
+
+   (Amended 2026-10-14 for #453, after review: the timing in **Shape** and the zero-chunk rule in
+   **Clock**. Before, the leading edge eased out (cubic) in angle over 800 ms. The globe's
+   projection squeezes the outer angles into a thin rim: from the home view the outer half of the
+   angle to the horizon draws in the outer quarter of the disc's radius. The ring therefore stood
+   at 0.59, 0.84 and 0.98 of the disc's radius at 0.1, 0.2 and 0.4 s, and was visible as a ring
+   for only about 0.1–0.15 s. Timed on screen over 1 s it stands at 0.09, 0.22, 0.50, 0.75 and 0.97
+   at 0.1, 0.2, 0.4, 0.6 and 0.8 s. These are held frames of the default cold load on a 1440 × 900
+   desktop; a 390 × 844 phone and the `hexagons` mode measure the same within 0.06. The cold
+   reveal also used to leave `data-atlas-wave` at `pending` for ever when it had no chunk.)
 8. **Reveal vs swap.** Progressive reveal (observations as soon as the scene and observations exist;
    then chunks with their masked cells) applies **only when no scientific layer is displayed**: the
    cold initial load, or a scene recreated by "Retry globe". Whenever a scientific layer is displayed,
@@ -729,18 +878,72 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    the legend renders from the artifact ref being revealed (with its loading status) as soon as the
    first chunk is added. At elevation > 0, no chunk is raised until the anchor heights are applied in
    the same frame.
+
+   (Amended 2026-10-13 for #453, the reveal wave of item 7. The cold reveal, and so a scene
+   recreated by "Retry globe", starts the wave as its first chunk is added, so a cell shows once
+   its chunk is added and the wave has reached it. A dataset switch, meaning a different
+   `artifactKey`, no longer cross-fades. At its commit the outgoing surface, support and
+   observations are retired, the incoming ones show at opacity 1, and a new wave grows the surface
+   from the centre of the view. Two datasets therefore never share one legend, and
+   `data-atlas-displayed` goes straight from the old id to the new one. A restyle of the displayed
+   artifact (metric, palette, geometry, marker style, elevation) keeps the single `animateSwap`
+   above and runs no wave, because it recolours the same data. Under reduced motion a switch is
+   instant.)
 9. **Off the critical path.** Cell outlines are built after `atlas:surface-visible` from worker ring
    buffers: the worker sends exact `primitiveCountMax`/`vertexCountMax` first; polylines are added to
    the `BufferPolylineCollection` (width 2, `allowPicking: false`) in slices sized to the frame budget
    (~2–4k per frame on desktop, fewer at 4×), with `scene.requestRender()` after each slice and a
-   `MessageChannel` yield (no `setTimeout(0)` clamps). The Natural Earth GeoJSON is fetched after
-   `atlas:surface-visible`, parsed in the worker into ring vertex buffers and a label table, and drawn
-   as a time-sliced `BufferPolylineCollection` plus a `LabelCollection` added in slices;
-   `GeoJsonDataSource` and its entities are dropped. Its height adjustment is skipped at elevation 0
-   and computed in the worker from grid rows on the first non-zero factor (or, when that factor
-   comes first, as soon as the worker has parsed the GeoJSON). The sky box is hidden
-   (`viewer.scene.skyBox.show = false` right after `new Viewer`, keeping sun and moon) until
-   `data-atlas-ready`, then shown.
+   `MessageChannel` yield (no `setTimeout(0)` clamps). The Natural Earth borders are fetched after
+   `atlas:surface-visible` as the compact GOBD file of §B.10 (the upstream GeoJSON until #445),
+   decoded in the worker into ring vertex buffers and a label table, and drawn as a time-sliced
+   `BufferPolylineCollection` plus a `LabelCollection` added in slices; `GeoJsonDataSource` and its
+   entities are dropped. Their height adjustment is skipped at elevation 0 and computed in the worker
+   from grid rows on the first non-zero factor (or, when that factor comes first, as soon as the
+   worker has decoded the borders). The sky box is hidden
+   (`scene.skyBox.show = false` right after the globe is built, keeping sun and moon) until
+   `data-atlas-ready` and its turn in the load order below, then shown.
+
+   **Post-reveal load order.** Three downloads follow the reveal. Each starts only when the one
+   before it has settled, so none of them shares the connection with another (`load-order.ts`):
+
+   1. **Borders.** The Natural Earth request starts at `atlas:surface-visible`, or when an artifact
+      request fails, as before. The step settles when the bytes have arrived or the fetch has
+      failed. Parsing and drawing go on while step 2 downloads, and `context-ready` still marks the
+      drawn borders.
+   2. **Detail tier** of the displayed artifact, `priority: 'low'`, queued at that artifact's
+      `atlas:surface-visible`. It starts when the borders have settled, and at once when they
+      already have, so a later artifact switch starts its detail tier as soon as its surface is
+      visible. It settles when the tier is decoded and validated, fails, or is aborted. The commit
+      that leaves an artifact aborts its request and drops a queued one that has not started. The
+      inspector's retry starts it at once. A tier already attached, as when a scene rebuilt by
+      "Retry globe" reveals the cached surface, needs no network: `values-ready` is marked at
+      `atlas:surface-visible` and the tier takes no turn. A turn that finds its artifact's request
+      already in flight joins that request.
+   3. **Starfield.** The sky box is shown when the borders and every detail step started so far
+      have settled, and not before `data-atlas-ready`. Its six textures (~870 KB) load then.
+
+   A failure never blocks the next step, and neither does a stall. A step that neither settles nor
+   reports progress for the provider's request stall window (15 s, §B.6.2) releases the next one and
+   keeps running. The borders and the detail tier report each body chunk, and every turn joined to
+   a detail request hears its chunks, so a slow transfer is not a stall. A scene rebuilt by "Retry
+   globe" starts a new order.
+
+   (Amended for #443, 2026-10-13. Before, the borders, the detail tier and the starfield started
+   together after the reveal and shared the connection. On a phone that delayed the borders, which
+   every visitor sees, behind a 3 MB tier that only the hover readout and the inspector read, and
+   behind cosmetic textures. The borders settle at their last byte, not when drawn, because the
+   parse and draw use no network. In an interleaved local probe of the e2e build (4× CPU, load
+   average 19–24, medians after `surface-visible`), settling when drawn left the link idle for
+   4.2–5.2 s and gave `values-ready` at 11,512 ms. Settling at the last byte gave 2,740 ms, with
+   `context-ready` unchanged within noise (8,595 against 8,670 ms). The detail tier settles when
+   decoded, so the starfield never competes with it. On desktop the order first brought a 600–800 ms
+   Atlas long frame right after the reveal in most cold loads: the borders now arrived within
+   ~0.1 s and were parsed and drawn inside a GPU stall that was already there. The cold commit
+   re-placed all 1,071 HbS sampling rings at heights they already had, and the 1,071 ring buffer
+   writes held the GPU, and every frame, for ~0.6 s in many loads. On main the sky-box
+   upload waited behind that stall and Cesium was charged for it. The rings now stay in place when
+   the heights they show arrive again; in an interleaved run of the cold-load harness, 12 runs
+   each, the longest Atlas frame was 68–77 ms against main's 69–75 ms.)
 10. **No coarse aggregated tier.** Averaging res-4 children into res-3/2 parents is an aggregation that
     must exclude masked cells and report the excluded fraction (AGENTS invariant; spec v1 §10) — a
     `needs-human-decision` this work does not take. Camera-ordered chunked reveal of the real res-4
@@ -804,7 +1007,14 @@ error.)
   (compressed `Content-Length`, hidden `Content-Encoding` → total = declared bytes; no declared bytes →
   null; aggregate stays < 1 until observations finish); inline-catalog parse and escaping; fixture
   catalogs pass `atlasCatalogSchema` and their objects match declared digests/bytes; the island chunk
-  contains no Cesium.
+  contains no Cesium. Added under #446 (`tests/atlas-bundle.test.ts`): the Cesium chunk carries none
+  of the widget layer's markers (`knockout` and one class name per `@cesium/widgets` widget); its
+  gzip size (zlib default level) is at most 1,037,389 × 1.01 bytes, the size CI (ubuntu x64,
+  Node 24) measured once the globe was built on `CesiumWidget` (1,032,528 bytes on darwin-arm64
+  with Node 23.9), and the test prints the size it measures so drift toward the limit shows in CI
+  logs; `/app/` ships the credit-row CSS
+  (`.cesium-widget-credits`, `.cesium-viewer-bottom`, `.cesium-viewer-cesiumWidgetContainer`) and
+  none of the widget layer's rules.
 - **Playwright** (`tests/atlas-browser-fixture.ts` rewritten, importing no app modules so the capture
   scripts keep running under Node type stripping): the e2e build sets `ATLAS_CATALOG_PATH` to the e2e
   fixture catalog, and the fixture fulfils grid/render/detail/observations URLs from the committed e2e
@@ -813,9 +1023,11 @@ error.)
   `site.spec.ts:121-147` (#172 transition) and `scripts/capture-atlas-progress.mjs` use it, plus a
   variant that delays only the render tier while observations load fast — asserting via
   `data-atlas-displayed` that only `hbs-rs334` is displayed while G6PD is pending. Detail tier delayed:
-  hover/click shows cell id, support label and "Loading cell values…", no number, no exception, then
-  updates in place. A corrupted render object shows "Retry data" and renders nothing. Existing explorer
-  tests keep passing. The cold-load spec (B.1) runs locally; its numbers go in the PR.
+  hover/click shows the "≈" mean and SD with "Loading…" for the interval (the inspector also shows
+  the cell id, support label and "Loading cell values…"), no unmarked number, no exception, then
+  updates in place to the exact values (amended 2026-10-13 under #444, with §B.2). A corrupted
+  render object shows "Retry data" and renders nothing. Existing explorer tests keep passing. The
+  cold-load spec (B.1) runs locally; its numbers go in the PR.
 - `playwright.performance.config.ts`: `testMatch: /atlas-(performance|cold-load)\.spec\.ts/`, with
   the cold-load spec creating its own contexts per profile.
 
@@ -828,6 +1040,159 @@ mime-db); `serve:test` becomes
 variable came from #412, picked up when Part B was rebased onto main; amended under R30).
 The Part B PR records what GitHub Pages actually sends for `.gosa` (`curl -H 'Accept-Encoding:
 gzip'`).
+
+### B.10 Compact Natural Earth borders (issue #445)
+
+Added after Part B shipped. The country borders were the upstream 1:50m admin-0 GeoJSON,
+3,083,490 bytes (1,027,460 gzip as Pages served it), the largest first-visit download after the
+Cesium bundle, although the overlay draws only polygon outer rings and reads 6 of its 168
+properties. The site now serves a derived file, `ne-50m-admin-0.borders.bin` (GOBD v1), 704,592
+bytes and 278,523 gzip.
+
+**Candidates.** Measured on the pinned source, each at the 10⁻⁴-degree lattice, plus the GOBD
+lattice sweep. Gzip is level 6, which local `serve` sends byte for byte. Decode is the
+cold median of 9 fresh dedicated workers in headless Chromium 153 (M3 Pro, unthrottled, shared
+machine, load average about 18), from bytes to `NaturalEarthBuffers`. "Cells" counts the drawn
+vertices whose H3 resolution-4 cell changes. Every row is plain rounding except the shipped one,
+which then snaps those vertices back into their cells (**Heights**, below): the same size and
+decode work, a slightly larger worst error, and no cell changes.
+
+| Encoding                                  | gzip bytes | vs today | decode  | max error         | cells |
+| ----------------------------------------- | ---------- | -------- | ------- | ----------------- | ----- |
+| today: upstream GeoJSON, all properties   | 1,022,612  | 1×       | 17.3 ms | 0                 | 0     |
+| (c) GeoJSON, 4 decimals, 6 properties     | 690,465    | 1.48×    | 11.2 ms | 0.00005°, 7.82 m  | 8     |
+| (a) TopoJSON, quantized 10⁻⁴, shared arcs | 376,766    | 2.71×    | 8.3 ms  | 0.00005°, 7.82 m  | 8     |
+| (b) GOBD 10⁻⁴                             | 278,523    | 3.67×    | 4.0 ms  | 0.00005°, 7.82 m  | 8     |
+| **(b) GOBD 10⁻⁴, snapped** (shipped)      | 278,523    | 3.67×    | 4.0 ms  | 0.00008°, 8.72 m  | 0     |
+| GOBD 10⁻⁶ (lossless: the source has 6 dp) | 410,472    | 2.49×    | 4.1 ms  | 0                 | 0     |
+| GOBD 10⁻⁵                                 | 337,186    | 3.03×    | n/m     | 0.000005°, 0.79 m | 3     |
+| GOBD 10⁻³                                 | 207,739    | 4.92×    | n/m     | 0.0005°, 77.6 m   | 87    |
+
+GOBD wins on size and decode at every lattice; JSON text of the same arcs (TopoJSON) gzips 35%
+larger and decodes 2× slower. At 10⁻⁴ the error (8.72 m at worst, after snapping) is under half a
+pixel at any camera height above about 22 km (1440 px wide, 60° field of view), where the view
+spans about half a res-4 cell, and far below the 1:50m source's own generalisation (median segment
+about 7 km); it is the coarsest of the measured lattices that keeps that. Lossless 10⁻⁶ is 2.49×
+smaller and changes nothing. Snapping already makes every height exact at 10⁻⁴, so lossless would
+buy only exact positions. Switching to it is not a one-constant change: besides `QUANTIZATION`,
+the error bounds are stated by hand (`MAX_ERROR_DEGREES` and `MAX_ERROR_METRES` in the generator,
+`BORDERS_MAX_ERROR_DEGREES` and `BORDERS_MAX_ERROR_METRES` in `natural-earth-codec.ts`), and the
+tests pin the lattice, those bounds and the 8 snapped vertices
+(`tests/test_encode_natural_earth_borders.py`,
+`website/tests/atlas-geometry-natural-earth.test.ts`); all of them would need restating.
+
+**Source and provenance.** The upstream file stays the generator's input, outside the site, as
+`reference/ne_50m_admin_0_countries.geojson` (sha256
+`3e458fc036ad0a66411f2c1e6cac49c5d7bfb81cb1123bc513b22511a2b7fdeb`, revision
+`ca96624a56bd078437bca8184e78163e5039ad19`; the same git blob the site shipped).
+`scripts/encode_natural_earth_borders.py` (stdlib, numpy and h3) refuses any other digest, validates
+the GeoJSON, with every violation a hard error, and writes the file deterministically. It takes the
+H3 resolutions to snap for from the published `catalog.json`'s `grids`. It decodes its own output
+against the snapped lattice before writing; `--check` fails when the committed file is stale,
+including after a change to the catalog's grid resolutions. The catalog's `context_sources` entry
+keeps id, label, licence, revision and upstream `source_url`; only `url` changes.
+`export_atlas_web.py` takes the key, revision and URL from the generator, so a re-export writes the
+same entry. The file header repeats the provenance (`source: {revision, sha256, url}`).
+
+**Format (GOBD v1, little-endian).** `"GOBD"`, u16 `format_version` = 1, u16 `reserved` = 0, u32
+`header_length`, header JSON, 0x00 padding to a 4-byte boundary, then the payload; nothing may
+follow it. The header is exactly `{arcs, features, quantization, source}`:
+
+- `arcs`: each arc's vertex count, at least 2;
+- `features`: `{polygons, properties}` in source order. A polygon lists its rings, outer first;
+  a ring lists signed arc references, where `~i` walks arc `i` backwards. Consecutive arcs share
+  their joining vertex, and a ring's last arc ends on its first vertex;
+- `properties`: a subset of ADMIN, NAME, NAME_LONG (strings) and LABEL_X, LABEL_Y, MIN_LABEL
+  (finite numbers);
+- `quantization`: lattice points per degree, an integer in [1, 10⁶];
+- `source`: as above.
+
+The payload holds V = Σ`arcs` vertices as 2V u32: interleaved lon and lat lattice integers in arc
+order, each delta-coded from the previous value on its axis (from 0), zigzag-coded, then
+byte-shuffled (byte k of element i at k·2V + i). A coordinate is `lattice / quantization`.
+
+Arcs come from cutting every ring at junctions: vertices whose neighbours differ between their
+occurrences, plus every ring's first vertex, so each ring decodes in source order. Each distinct
+cut is stored once; 1,965 arcs hold 80,681 vertices for 97,981 ring positions (365 of 2,330
+references walk an arc backwards). The header is 59,132 bytes (17,039 gzip), the payload 645,448
+(259,986 gzip).
+
+**Hard errors** (the same checks, in this order, in the Python and TypeScript decoders):
+
+- too short for the preamble; wrong magic or version; reserved ≠ 0;
+- header past the end, not UTF-8 JSON, or not an object; non-zero padding;
+- the strict header schema: keys, quantization, source, arc counts, each feature's keys,
+  properties and polygon and ring nesting, and every arc reference an integer in range;
+- an arc no ring references;
+- a length that is not payload start + 8V;
+- a coordinate outside ±180°/±90°;
+- per ring, in order: arcs that do not meet end to start, a ring that does not close, or fewer
+  than four positions.
+
+One check differs between the two. `JSON.parse` reads `2.0` and `2e0` as the Number 2, so the
+TypeScript decoder accepts an integral count, quantization or arc reference written with a fraction
+or exponent, and the Python decoder (`_is_count`, `isinstance(ref, int)`) refuses it. The generator's
+canonical JSON never writes one. A test on each side pins its behaviour.
+
+The worker posts a decode failure as a `validation` error, and the overlay falls back as before.
+
+**What the overlay draws (unchanged).** The decoder fills the same `NaturalEarthBuffers` the
+GeoJSON parse did: outer rings closed and then their first vertex repeated, holes decoded and
+checked but not drawn, and one label per distinct text (`labelFor`). The tests hold it to that
+parse, kept verbatim in `website/tests/helpers/natural-earth-geojson.ts`, run on the pinned source:
+
+- `ringOffsets` (1,620 rings, 101,052 vertices) and all 242 labels are identical;
+- no coordinate moves more than 0.00008° per axis, and no position more than 8.8 m (8.72 m
+  measured, at a snapped vertex; rounding alone moves a position at most 0.00005°, 7.82 m);
+- the credit text is unchanged.
+
+**Heights.** `naturalEarthHeights` is unchanged and runs on the decoded positions. It reads a
+vertex only through `latLngToCell(lat, lon, grid.resolution)`, so a height is exact when the decoded
+vertex is in its source's cell. Rounding alone carried 8 of the 101,052 drawn vertices (8 of 78,539
+distinct positions) into a neighbouring res-4 cell. Over the 30 published layers and both metrics,
+269 of their 480 heights differed, by up to 2,786 m at exaggeration 1 (`g6pd-deficiency`
+`post_sd`).
+
+The generator therefore snaps each such vertex. It takes the nearest lattice point (great-circle
+distance from the source, ties to the smaller lattice x, then y) that is in the source's cell at
+every resolution of the catalog's `grids`, which is resolution 4 today. That point must be at most
+2 steps per axis from the rounded point; if there is none, encoding fails with an error. Each of
+the 8 moved one step. Every border and label height now matches the GeoJSON build bit for bit:
+
+- on all 30 layers × 2 metrics, checked by a one-off script over the git-ignored render tiers;
+- in CI, pytest checks every committed position's cell with h3-py, and vitest checks every drawn
+  vertex's cell with h3-js, plus the heights on the res-4 parity fixture.
+
+h3-py and h3-js are both H3 4.5.0, but they convert degrees to radians with different
+floating-point steps. The vitest therefore pins the 8 snapped vertices to the cells h3-py chose. A
+one-off check found the two libraries agree on all 597,678 cells it compared: every position,
+source and decoded, at resolutions 3 to 5. Both tests read the published catalog's grid
+resolutions, so a grid at a resolution the file was not snapped for fails them (at resolution 5,
+28 positions would change cell). Re-run the generator when those resolutions change.
+
+**Screen.** `website/scripts/capture-atlas-borders.mjs` captures seven views before and after:
+borders alone on the globe, in 2D, at 1,500 km, 60 km and 20 km; the elevated HbS surface; and a
+tilted elevated view over the snapped Gulf of Gabès vertex. Two captures of one build are
+byte-identical, so the counts measure the change alone:
+
+- at most 0.1136% of pixels differ by more than 2/255 (at 20 km, where 8.8 m is about half a
+  pixel);
+- 0.0116% on the default globe;
+- in the tilted view, nothing differs by more than 2/255 in a 100×60 px window around the snapped
+  vertex. Before snapping, it dipped about 10.8 km at ×5, and 42 pixels there differed by more
+  than 16/255;
+- every view passes the 0.5% gate of §B.1.
+
+`docs/figures/atlas-compact-borders-parity.receipt.json` records the counts.
+
+**Serving.** `.bin` is `application/octet-stream`, which Pages gzips (the deployed `.gosa` grid
+came back `content-encoding: gzip` on 2026-10-13) and local `serve` gzips to 278,523 bytes. The
+file stays a site-base key (§B.4, C.1.1).
+
+**Out of scope.** `ne-50m-populated-places.json` (118,304 bytes, 32,640 gzip as served) is already
+a compact derived table, not GeoJSON, and is unchanged. Part C (#437) rewrites `catalog.json` as a
+whole, and the catalog is one canonical line, so the two changes conflict on that line: keep
+#437's catalog with `context_sources[0].url = "ne-50m-admin-0.borders.bin"`.
 
 ---
 
@@ -845,12 +1210,14 @@ gzip'`).
    `check_commercial_use.py`). History is not rewritten. `.gitignore` gains separate lines for the
    staging directory and `website/public/data/atlas/*.surface.json`, `*.observations.json`,
    `*.manifest.json`.
-4. No GCP project id or bucket name is committed (`docs/repo-gcloud-auth.md`). The artifact base is
-   the build variable `PUBLIC_ATLAS_DATA_BASE_URL`: an absolute `https://` URL that includes the
+4. No GCP project id or bucket name is committed (`docs/repo-gcloud-auth.md`), in any GCS URL form;
+   tests and docs write `example-*` or a placeholder, and only third-party public data buckets the
+   pipeline reads (gnomAD's) are named. The artifact base is the build variable
+   `PUBLIC_ATLAS_DATA_BASE_URL`: an absolute `https://` URL that includes the
    `atlas/web/` prefix and ends in `/`; empty means unset (same-origin fallback, used only by local dev
    and tests). `pages.yml` sets it from the repository variable `ATLAS_DATA_BASE_URL` in the
-   production `build` job only. `tests/setup/build.ts` and the `test:e2e` build set it to `''`
-   explicitly. A wiring test (like `google-maps-config.test.ts`) pins the `pages.yml` line, the
+   production `build` job only. `tests/setup/build.ts` sets it to `''` explicitly; the `test:e2e`
+   build sets it to the local cross-origin data server, `http://127.0.0.1:4323/` (C.3, E2E). A wiring test (like `google-maps-config.test.ts`) pins the `pages.yml` line, the
    `.env.example` entry and the absence of any `ORIGIN`-named variant.
 5. **Deploy gate** (`scripts/check_atlas_web_data.py`, run in `pages.yml` `build` before deploy, and in
    `validate` for same-repo PRs): fails when the baked-in base is empty or not absolute; for every
@@ -895,9 +1262,9 @@ gzip'`).
   `hashlib.md5`, no new dependency). `--dry-run` prints every command. Compressed bytes and CRC32C are
   never compared across runs.
 - **CORS** (`gcloud storage buckets update --cors-file`): `GET`, `HEAD` from `https://genome-os.org`,
-  `http://genome-os.org` (the site still answers on HTTP), `https://www.genome-os.org`,
-  `https://bschilder.github.io`, and `http://localhost` / `http://127.0.0.1` on ports 4321, 4322 and
-  4323; response headers `Content-Length`, `Content-Type`, `Content-Encoding`, `ETag`;
+  `https://www.genome-os.org`, and `http://localhost` / `http://127.0.0.1` on ports 4321, 4322 and
+  4323 (amended 2026-10-10: Pages enforces HTTPS and `genomeos.github.io` only redirects to
+  `genome-os.org`, so no page is served from `http://genome-os.org` or a `github.io` origin); response headers `Content-Length`, `Content-Type`, `Content-Encoding`, `ETag`;
   `maxAgeSeconds` 3600.
 - **CDN modes** (`scripts/provision_atlas_web_bucket.py --mode edge|cloud-cdn`, idempotent,
   `--dry-run`):
@@ -958,7 +1325,7 @@ gzip'`).
 | Ruling | Why | Cost if wrong |
 | --- | --- | --- |
 | No coarse aggregated preview; camera-ordered chunked reveal | Aggregating masked cells is a `needs-human-decision` scientific rule | A `preview` tier can be added later; the client supports tiers |
-| f64 detail tier for every displayed number; f32 render tier for colour/height/bins | Displayed values stay bit-identical to the citable artifact | ~3 MB extra, fetched lazily per layer |
+| f64 detail tier for every exact displayed number; f32 render tier for colour/height/bins, and, marked "≈", for the mean and SD until the detail tier loads (amended 2026-10-13 under #444) | Unmarked values stay bit-identical to the citable artifact; 77 of 4,670,640 provisional readouts differ from the exact ones, each in the last digit | ~3 MB extra, fetched lazily per layer |
 | Bins from the render tier; the one f32 bin flip is reported | Recolouring when detail arrives would visibly change the map after load | One cell in one layer differs by one bin from an f64 binning |
 | Progressive reveal only on cold load/retry; every replacement is one atomic swap | Never show two artifacts (or two palettes) under one legend (Cesium design §9) | Warm switches stay all-at-once, as today |
 | Support mask built in the worker per chunk, in lockstep with the surface | A chunk without its mask reads as "low value" | Replaces Cesium's async `PolygonGeometry` path for support cells |
@@ -979,3 +1346,4 @@ gzip'`).
 | Issues filed before each part's first work commit (owner's approval authorises filing) | AGENTS "issue first" | None |
 | Part C operations run on the stacked branch before the owner merges A and B | Merges are the owner's call; content-addressed keys make early publishing safe | Re-run encode/publish if review changes Part B's bytes |
 | Stacked PRs A → B → C, one spec, one plan | AGENTS "one PR per coherent unit"; B and C share the format | Merge order is fixed |
+| Format version in the committed catalog, not in object headers (amended 2026-10-17, #467) | The catalog deploys with the site and names every object by digest; header bytes are hashed into immutable keys | A per-object change still needs a MAJOR bump and new keys |

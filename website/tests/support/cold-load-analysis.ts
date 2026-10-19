@@ -4,6 +4,7 @@
  * path and the bytes ledger. No Playwright or browser dependency.
  */
 import { CHUNK_FRAME_MEASURE } from '../../src/atlas/scene/chunk-scheduler';
+import { REVEAL_WAVE_MEASURE } from '../../src/atlas/scene/reveal-wave';
 import type { NetworkConditions } from './cold-load-profiles';
 
 export interface TimingEntry {
@@ -159,6 +160,22 @@ export function revealStats(
   };
 }
 
+/** The cold reveal's wave (#453): the first `atlas:reveal-wave` measure, page times in ms. */
+export function revealWaveFrom(
+  measures: readonly TimingEntry[],
+): { startMs: number; endMs: number; durationMs: number } | null {
+  const wave = measures
+    .filter((entry) => entry.name === REVEAL_WAVE_MEASURE)
+    .sort((left, right) => left.startTime - right.startTime)[0];
+  return wave
+    ? {
+        durationMs: wave.duration,
+        endMs: wave.startTime + wave.duration,
+        startMs: wave.startTime,
+      }
+    : null;
+}
+
 export type ScriptAttribution = 'atlas' | 'cesium' | 'cesium-eval' | 'other';
 
 export interface AttributionContext {
@@ -198,7 +215,7 @@ const WORKER_MESSAGE_INVOKER = /Worker|MessagePort/;
  *   rest of that render. Charging the whole callback can over-report Atlas
  *   on chunk frames, never under-report it. The Atlas-owned render loop
  *   (`src/atlas/scene/render-loop.ts`, whose tick only resizes and renders
- *   the viewer) is bundled into the Cesium chunk (astro.config.mjs), so its
+ *   the CesiumWidget) is bundled into the Cesium chunk (astro.config.mjs), so its
  *   frames attribute as Cesium's default loop did.
  * - Worker and `MessagePort` handlers, every other same-origin `/_astro/`
  *   chunk and the document's own scripts count as Atlas; the rest is `other`.

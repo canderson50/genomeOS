@@ -8,6 +8,8 @@ import {
   type TestInfo,
 } from '@playwright/test';
 
+import { globeViewCentre } from './atlas-globe-helpers';
+
 export const PHONE_PROFILES = [
   { name: 'Pixel 7', use: {} },
   {
@@ -44,6 +46,34 @@ export async function waitForAtlasReady(page: Page): Promise<void> {
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+}
+
+/**
+ * The surface reveal wave (#453) has passed: every cell is grown and can be hovered or picked.
+ * Every test that points at the surface waits here first. The explorer reads `pending` until
+ * the scene's first wave, which starts with the first surface chunk, so call it once the map is
+ * ready; under reduced motion it reads `done` at once.
+ */
+export async function waitForRevealWave(page: Page): Promise<void> {
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-wave',
+    'done',
+  );
+}
+
+/**
+ * Wait for the cold reveal and the loads after it to finish: ready, cell edges, the drawn borders
+ * and the exact cell values. Until then the scene requests a frame per border slice, and under the
+ * CI runners' software WebGL each frame is a long task, so a page call queued behind them can take
+ * more than a poll's 5 s (#455; analytics.spec.ts found the same for its layout claims). A claim
+ * about the steady page is checked on the settled page.
+ */
+export async function waitForAtlasSettled(page: Page): Promise<void> {
+  await expect(
+    page.locator(
+      '[data-atlas-ready="true"][data-atlas-edges-ready="true"][data-atlas-context-ready="true"][data-atlas-values-ready="true"]',
+    ),
+  ).toBeVisible({ timeout: 45_000 });
 }
 
 export type SheetStateName = 'peek' | 'half' | 'full';
@@ -245,14 +275,16 @@ async function canvasAt(page: Page, point: Point): Promise<boolean> {
 }
 
 /**
- * Taps near the globe centre (as the desktop picking test clicks) until an
+ * Taps near the camera target (where the desktop picking tests point) until an
  * inspector opens. A slow pick can open the panel sheet at half after its wait
  * timed out, so each retry first checks that no inspector is open and that its
  * point is still bare canvas; otherwise it would tap the new sheet's handle.
  */
 export async function tapSelectNearCenter(page: Page): Promise<void> {
+  await waitForRevealWave(page);
   const inspector = page.locator('.atlas-inspector');
-  const centre = await centreOf(page.locator('.atlas-scene canvas').first());
+  // The camera target: the canvas centre on a phone, beside the controls on desktop (#452).
+  const centre = await globeViewCentre(page);
   for (const [dx, dy] of CENTRE_OFFSETS) {
     if (await inspector.isVisible()) return;
     const point = { x: centre.x + dx, y: centre.y + dy };
@@ -556,6 +588,42 @@ export async function recordLegendLoading(page: Page): Promise<void> {
       subtree: true,
     });
   })();`);
+}
+
+/**
+ * Call before navigating. Records the legend row in the frame the explorer
+ * first reports data-atlas-ready, before anything the cold load defers past
+ * the reveal (outlines, the Natural Earth overlay) arrives.
+ */
+export async function recordLegendRowAtReady(page: Page): Promise<void> {
+  await page.addInitScript(`(() => {
+    const measure = ${measureLegendRow.toString()};
+    const observer = new MutationObserver(() => {
+      const legend = document.querySelector(
+        '.atlas-explorer[data-atlas-ready="true"] .atlas-legend',
+      );
+      if (!legend) return;
+      observer.disconnect();
+      window.atlasLegendRowAtReady = measure(legend);
+    });
+    observer.observe(document, {
+      attributeFilter: ['data-atlas-ready'],
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+  })();`);
+}
+
+/** What `recordLegendRowAtReady` measured; fails if the explorer never got ready with a legend. */
+export async function recordedLegendRowAtReady(page: Page): Promise<LegendRow> {
+  const row = await page.evaluate(
+    () =>
+      (window as unknown as { atlasLegendRowAtReady?: LegendRow })
+        .atlasLegendRowAtReady ?? null,
+  );
+  expect(row, 'the legend row at data-atlas-ready').not.toBeNull();
+  return row!;
 }
 
 /** What `recordLegendLoading` saw, or null if the legend never showed its loading state. */

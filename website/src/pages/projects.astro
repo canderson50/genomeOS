@@ -1,0 +1,412 @@
+---
+/**
+ * Projects, at /projects/ (round 2 spec §4.2; rulings R2-3, R2-4, R2-14, R2-15, R2-16, 35–39; the
+ * owner's restructure of 2026-10-15; #454; the old /project/ redirects here): the Foundation's
+ * projects, then the genomeOS Atlas's chapter, which opens on an overview of the essentials and
+ * keeps every detail in collapsed sections a reader opens on demand.
+ *
+ *   #projects   intro + the project index (lead figure)
+ *   #atlas      the Atlas overview: why it matters, what it is, the pill, the mark and its key,
+ *               three totals and "How we count"
+ *   sections    closed by default (AtlasSection.astro), each a summary row:
+ *                 Why hemoglobin S makes it tangible   #hbs
+ *                 What it could be used for            #applications
+ *                 How it works                         #join-up → #counts → #pipeline → #safeguards
+ *                 Where it stands                      #status
+ *   then follow the work (a link row, no figure)
+ *
+ * Outline: h1 "What we’re building." → h2 "genomeOS Atlas" → an h3 per section row (in its
+ * summary) → h4 subsections inside "How it works" (and h2 "Follow the work."). Round 1's ids are
+ * kept, so old deep links land after the redirect, and a link into a closed section opens it.
+ * Eight concept sections, each carried by one figure; the words are the spec's copy deck.
+ */
+import Glyph from '../components/kit/Glyph.astro';
+import Icon from '../components/kit/Icon.astro';
+import type { IconName } from '../components/kit/icons';
+import Pipeline from '../components/kit/Pipeline.astro';
+import PageIntro from '../components/PageIntro.astro';
+import ApplicationCard from '../components/project/ApplicationCard.astro';
+import AtlasOverview from '../components/project/AtlasOverview.astro';
+import AtlasSection from '../components/project/AtlasSection.astro';
+import CountsFigure from '../components/project/CountsFigure.astro';
+import HbsThresholdMap from '../components/project/HbsThresholdMap.astro';
+import JoinUp from '../components/project/JoinUp.astro';
+import ProjectIndex from '../components/project/ProjectIndex.astro';
+import SafeguardTile from '../components/project/SafeguardTile.astro';
+import StatusRail from '../components/project/StatusRail.astro';
+import { GITHUB_REPOSITORY } from '../data/nav';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+import '../styles/pages/projects.css';
+
+const APPLICATIONS: {
+  title: string;
+  horizon?: string;
+  tone?: 'aurora' | 'ion' | 'genome';
+  line: string;
+}[] = [
+  {
+    title: 'Screening programs',
+    horizon: 'First release',
+    tone: 'aurora',
+    line: 'Where carrier screening would help most.',
+  },
+  {
+    // A status like the other future card, never a limitation (ruling 59).
+    title: 'Diagnostic context',
+    horizon: 'Future exploration',
+    tone: 'genome',
+    line: 'Regional context before a genetic test.',
+  },
+  {
+    title: 'Trial planning',
+    line: 'Where a study could find enough carriers.',
+  },
+  {
+    title: 'The map of what we don’t know',
+    line: 'Where the next sample matters most.',
+  },
+  {
+    title: 'Medicines and drug response',
+    horizon: 'Future exploration',
+    tone: 'genome',
+    line: 'Variants that change a dose.',
+  },
+  {
+    title: 'Research and discovery',
+    line: 'Patterns worth testing.',
+  },
+];
+
+const SAFEGUARDS = [
+  {
+    title: 'Measurements and estimates never merge',
+    line: 'Separate tables, layers and legends.',
+  },
+  {
+    title: 'Unknown stays visible',
+    line: 'Too little evidence is hatched, never colored.',
+  },
+  {
+    title: 'Zoom cannot manufacture detail',
+    line: 'A coarse cell stays one cell.',
+  },
+  {
+    title: 'Assumptions remain explicit',
+    line: 'No convenient defaults for places, recruitment or denominators.',
+  },
+  {
+    title: 'Clinical scope is enforced',
+    line: 'Single-variant conditions and drug response only.',
+  },
+  {
+    title: 'No evidence means no number',
+    line: 'A blank beats a plausible guess.',
+  },
+] as const;
+
+const REPOSITORY = `${GITHUB_REPOSITORY}/blob/main`;
+const LINKS: {
+  label: string;
+  href: string;
+  icon: IconName;
+  external: boolean;
+}[] = [
+  {
+    label: 'Project board',
+    href: 'https://github.com/orgs/genomeOS/projects/1',
+    icon: 'board',
+    external: true,
+  },
+  {
+    label: 'Overview',
+    href: `${REPOSITORY}/docs/overview.md`,
+    icon: 'document',
+    external: true,
+  },
+  {
+    label: 'Objectives',
+    href: `${REPOSITORY}/docs/scientific-engineering-objectives.md`,
+    icon: 'document',
+    external: true,
+  },
+  {
+    label: 'Atlas v1 design',
+    href: `${REPOSITORY}/docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md`,
+    icon: 'document',
+    external: true,
+  },
+  { label: 'Docs', href: sitePath('/docs/'), icon: 'arrow', external: false },
+];
+---
+
+<SiteLayout
+  title="Projects"
+  description="The genomeOS Foundation's projects. First, the genomeOS Atlas: why it exists, how it works and what comes next."
+>
+  <Glyph sprite />
+  <Icon sprite />
+
+  <div class="proj-intro" id="projects" data-concept>
+    <PageIntro
+      layout="split"
+      note="Projects"
+      title="What we’re building."
+      lede="One project is live. Many more can start with you."
+    >
+      <ProjectIndex slot="figure" />
+    </PageIntro>
+  </div>
+
+  <section
+    class="band band--orbit atlas"
+    id="atlas"
+    aria-labelledby="atlas-title"
+  >
+    <div class="section-shell">
+      <AtlasOverview />
+
+      <div class="acc-list">
+        <AtlasSection
+          name="hbs"
+          icon="cells"
+          title={'Why hemoglobin\u00a0S makes it tangible'}
+          titleId="hbs-title"
+          teaser="One variant, three genotypes, and where each is expected among births."
+        >
+          <section
+            class="proj-hbs"
+            id="hbs"
+            data-concept
+            aria-labelledby="hbs-title"
+          >
+            <p class="proj-lede">
+              One copy can protect against severe malaria; two cause sickle-cell
+              disease. Its frequency traces biology, environment and history.
+            </p>
+            <HbsThresholdMap />
+          </section>
+        </AtlasSection>
+
+        <AtlasSection
+          name="uses"
+          icon="target"
+          title="What it could be used for"
+          titleId="applications-title"
+          teaser="Screening, diagnosis, trials, and where to sample next."
+        >
+          <section
+            class="proj-apps"
+            id="applications"
+            data-concept
+            aria-labelledby="applications-title"
+            data-motion-surface
+          >
+            <figure
+              class="apps proj-apps__figure"
+              data-graphic="applications"
+              data-kind="mechanism"
+            >
+              <figcaption class="visually-hidden">
+                Six uses for the Atlas, from screening programs to research.
+              </figcaption>
+              <div
+                class="apps__grid"
+                data-figure-stage
+                role="group"
+                aria-labelledby="applications-title"
+              >
+                {
+                  APPLICATIONS.map((application, index) => (
+                    <ApplicationCard
+                      index={index}
+                      glyph={(index + 1) as 1 | 2 | 3 | 4 | 5 | 6}
+                      level={4}
+                      {...application}
+                    />
+                  ))
+                }
+              </div>
+            </figure>
+            <a
+              class="github-cta proj-apps__cta"
+              href={`${GITHUB_REPOSITORY}/discussions/1`}
+              target="_blank"
+              rel="noopener noreferrer"
+              ><span>Help shape it</span><strong>Suggest an application</strong
+              ><span aria-hidden="true">↗</span></a
+            >
+          </section>
+        </AtlasSection>
+
+        <AtlasSection
+          name="how"
+          icon="flow"
+          title="How it works"
+          titleId="process-title"
+          teaser="From scattered tables to a map, with rules that keep it honest."
+        >
+          <section
+            class="proj-sub proj-joinup"
+            id="join-up"
+            data-concept
+            aria-labelledby="join-up-title"
+          >
+            <h4 class="h4-section" id="join-up-title">
+              From scattered tables to placed evidence
+            </h4>
+            <JoinUp />
+          </section>
+
+          <section
+            class="proj-sub proj-counts"
+            id="counts"
+            data-concept
+            aria-labelledby="counts-title"
+          >
+            <div class="layout-figure-split">
+              <div class="layout-figure-split__text proj-counts__text">
+                <h4 class="h4-section" id="counts-title">
+                  Counts, not guesses
+                </h4>
+                <p class="proj-counts__note">
+                  <strong>Zero is weak evidence, not absence.</strong> Each person
+                  carries two copies of the gene; the Atlas counts copies.
+                </p>
+              </div>
+              <div class="layout-figure-split__figure">
+                <CountsFigure />
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="proj-sub proj-pipeline"
+            id="pipeline"
+            data-concept
+            aria-labelledby="pipeline-title"
+          >
+            <h4 class="h4-section" id="pipeline-title">
+              From evidence to an explorable map
+            </h4>
+            <Pipeline
+              mode={6}
+              stageBrackets={false}
+              idPrefix="project-pipeline"
+              island={false}
+              class="is-drawn"
+            />
+          </section>
+
+          <section
+            class="proj-sub proj-safeguards"
+            id="safeguards"
+            data-concept
+            aria-labelledby="safeguards-title"
+          >
+            <figure class="sg" data-graphic="safeguards" data-safeguards>
+              <figcaption>
+                <h4 class="h4-section" id="safeguards-title">
+                  Six rules the interface cannot hide
+                </h4>
+              </figcaption>
+              <svg class="sg-defs" aria-hidden="true" focusable="false">
+                <defs>
+                  <pattern
+                    id="sg-hatch"
+                    width="5"
+                    height="5"
+                    patternUnits="userSpaceOnUse"
+                    patternTransform="rotate(45)"
+                  >
+                    <rect class="sg-hatch-ground" width="5" height="5"></rect>
+                    <path class="sg-hatch-stroke" d="M2.5 0V5"></path>
+                  </pattern>
+                </defs>
+              </svg>
+              <div
+                class="sg-stage"
+                data-figure-stage
+                role="group"
+                aria-labelledby="safeguards-title"
+              >
+                <ol class="sg-grid">
+                  {
+                    SAFEGUARDS.map((rule, index) => (
+                      <SafeguardTile
+                        rule={(index + 1) as 1 | 2 | 3 | 4 | 5 | 6}
+                        title={rule.title}
+                        line={rule.line}
+                      />
+                    ))
+                  }
+                </ol>
+              </div>
+            </figure>
+            <a class="proj-more" href={sitePath('/docs/scientific-safeguards/')}
+              >Safeguards in Docs<Icon name="arrow" size={18} /></a
+            >
+          </section>
+        </AtlasSection>
+
+        <AtlasSection
+          name="status"
+          icon="flag"
+          title="Where it stands"
+          titleId="status-title"
+          teaser="What is available now, in development and further out."
+        >
+          <section
+            class="proj-status"
+            id="status"
+            data-concept
+            aria-labelledby="status-title"
+          >
+            <StatusRail titleId="status-title" />
+          </section>
+        </AtlasSection>
+      </div>
+    </div>
+  </section>
+
+  <section class="band proj-follow" aria-labelledby="follow-title">
+    <div class="section-shell">
+      <h2 class="proj-h2" id="follow-title">Follow the work.</h2>
+      <ul class="proj-links">
+        {
+          LINKS.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                target={link.external ? '_blank' : undefined}
+                rel={link.external ? 'noopener noreferrer' : undefined}
+              >
+                <Icon name={link.icon} />
+                <span>{link.label}</span>
+                {link.external && (
+                  <Icon name="external" size={18} class="proj-links__out" />
+                )}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+</SiteLayout>
+
+<script>
+  /*
+   * The page's one island (round 2 spec §4.2; owner request, 2026-10-15): the Atlas chapter's
+   * collapsed sections. Each section's figures are a module of their own, imported when the section
+   * first opens (accordion.ts), so a closed section loads no script and no data.
+   */
+  import { initAccordion } from '../components/project/accordion';
+
+  initAccordion({
+    hbs: () => import('../components/project/section-hbs'),
+    uses: () => import('../components/project/section-uses'),
+    how: () => import('../components/project/section-how'),
+    status: () => import('../components/project/section-status'),
+  });
+</script>

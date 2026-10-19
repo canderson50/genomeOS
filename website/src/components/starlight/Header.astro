@@ -1,0 +1,587 @@
+---
+/**
+ * The docs header (site redesign spec §1.5, #454): the site's own lockup, nav and Atlas link around
+ * Starlight's search, so the docs read as part of the site. The nav (Projects · Contribute · Docs ·
+ * Contact · GitHub, Docs current) shows from 72em; below that the sidebar's "Explore the site" group
+ * carries the page links. GitHub shows from 50em, where the sidebar stops being the mobile menu
+ * (whose footer carries the social icons), so the repository is one click away at every width.
+ *
+ * The Atlas link is the site header's pill (design critique of the integrated build: the docs bar
+ * had a plain outline with no globe, no arrow and no glow): SiteHeader.astro's .launch-atlas-cta,
+ * a black pill in an aurora rim with the colour globe and the arrow, its aurora's glow held still
+ * where the site's comes to rest (no motion on the docs). It takes the site's compact form (no
+ * arrow) exactly where the site's does, from 72em to 87em, and its arrow everywhere else. The
+ * globe is the favicon's, drawn small and inline (atlas-globe.ts; the favicon image itself is 6 KB
+ * past the docs' budget). Round 2 of the critique: the bar carried a line globe and dropped the
+ * arrow at 1440 px. The phone bar's menu is the site's "Menu +" (MobileMenuToggle.astro), and
+ * between 50em and 72em, where site pages show "Menu +" beside the pill, so does this bar: the
+ * site's disclosure of the four page links (Starlight's sidebar, beside the page there, keeps the
+ * docs' own pages).
+ *
+ * Design review, round 2: it reads in the site header's order and type, so going from a site page
+ * to Docs the primary nav neither jumps across the row nor changes weight: the lockup, the nav
+ * directly after it, then Search and the Atlas link on the right (DOM order too, so focus follows);
+ * labels at the site's weight and colours (muted, the current page starlight); every item centring
+ * its link, so GitHub's label shares the others' baseline.
+ *
+ * Design review, round 3: the lockup and the nav also stand where the site's compact header puts
+ * them. From 50em the header's contents sit in the site's content column (starlight.css pads the
+ * bar to the site gutter and the 76rem container), the lockup is the compact one (2.6rem tall, the
+ * site's --lockup-compact-width) and, as on the site, it keeps the landing lockup's slot, so the
+ * nav starts where it starts on every site page.
+ *
+ * Contact page spec §1 (review 3, I-1): Contact lengthens the nav, and Search has only the room the
+ * nav leaves, 75 px at 1,152 px, where the whole button needs about 164 px. Squeezed, its
+ * magnifier shrank to nothing and its key hint ran onto the Atlas link. So Search is a size
+ * container, and where its room is too small its button sheds the key hint, then its label,
+ * leaving the outlined square magnifier (Starlight's own phone header shows that). It keeps the
+ * name "Search" and Ctrl/⌘ K, and no nav item moves or goes.
+ *
+ * Round 2 (spec §4.4, R2-9; docs-light.md V1): the docs read on paper under this bar, which stays
+ * the site's dark bar exactly (starlight.css gives the header subtree the dark tokens back). The
+ * "Dark theme" toggle (ThemeSelect.astro) sits from 50em between Search and the Atlas link, half a
+ * rem after Search: the two docs tools read as one pair. Search, the size container, gives up the
+ * toggle's room first (spec §1.1, plan T6), so it sheds its key hint a little sooner than before.
+ * Where the whole nav first shows (72em to 78em) even the bare magnifier and the toggle had no room
+ * left, so there the row's gaps close to half a rem (the lockup keeping its slot, so the nav stands
+ * where the site's does) and the Atlas link takes the site pill's compact form. Nothing in the nav
+ * moves or goes.
+ */
+import Search from '@astrojs/starlight/components/Search.astro';
+
+import GitHubLink from '../GitHubLink.astro';
+import ThemeSelect from './ThemeSelect.astro';
+import EncodingStyle from '../kit/EncodingStyle.astro';
+import { atlasGlobe } from './atlas-globe';
+import { PRIMARY_NAV } from '../../data/nav';
+import { sitePath } from '../../lib/paths';
+import '../../styles/tokens.css';
+---
+
+<div class="docs-header">
+  <a class="docs-header__home" href={sitePath('/')}>
+    <img
+      class="docs-header__lockup"
+      src={sitePath('/brand/genomeos-lockup-dark.svg')}
+      width="1395"
+      height="300"
+      alt="genomeOS Foundation"
+      decoding="async"
+    />
+  </a>
+  <nav class="docs-header__nav print:hidden" aria-label="Primary navigation">
+    <ul>
+      {
+        PRIMARY_NAV.map(({ label, href }) => (
+          <li>
+            <a
+              href={sitePath(href)}
+              aria-current={href === '/docs/' ? 'page' : undefined}
+            >
+              {label}
+            </a>
+          </li>
+        ))
+      }
+      <li class="docs-header__github"><GitHubLink /></li>
+    </ul>
+  </nav>
+  <div class="docs-header__tools print:hidden">
+    <div class="docs-header__search">
+      <Search />
+    </div>
+    <ThemeSelect place="header" />
+  </div>
+  <a class="docs-header__atlas print:hidden" href={sitePath('/app/')}>
+    <svg
+      class="docs-header__atlas-mark"
+      viewBox="0 0 100 100"
+      aria-hidden="true"
+      focusable="false"
+      set:html={atlasGlobe('docs-atlas-globe')}
+    />
+    <span class="docs-header__atlas-label">
+      <span class="brand-name">genomeOS</span> Atlas
+    </span>
+    <svg
+      class="docs-header__atlas-arrow"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M5 12h13M13 6l6 6-6 6"></path>
+    </svg>
+  </a>
+  <details class="docs-menu print:hidden">
+    <summary>Menu</summary>
+    <nav aria-label="Site navigation">
+      <ul>
+        {
+          PRIMARY_NAV.map(({ label, href }) => (
+            <li>
+              <a
+                href={sitePath(href)}
+                aria-current={href === '/docs/' ? 'page' : undefined}
+              >
+                {label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </details>
+</div>
+<EncodingStyle />
+
+<script is:inline>
+  /* The Menu closes on Escape (focus back to its summary from inside it), and on a press or a focus
+     outside it, as the site's does (SiteHeader.astro). */
+  (() => {
+    const menu = document.querySelector('details.docs-menu');
+    if (!menu) return;
+    const outside = (event) => {
+      if (menu.open && !menu.contains(event.target)) menu.open = false;
+    };
+    addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key !== 'Escape' || !menu.open) return;
+        const inside = menu.contains(document.activeElement);
+        menu.open = false;
+        if (inside) menu.querySelector('summary').focus();
+      },
+      true,
+    );
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('focusin', outside);
+  })();
+</script>
+
+<style>
+  @layer starlight.core {
+    .docs-header {
+      display: flex;
+      align-items: center;
+      gap: var(--sl-nav-gap);
+      height: 100%;
+    }
+
+    .docs-header__home {
+      flex: none;
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .docs-header__lockup {
+      width: auto;
+      height: 2rem;
+    }
+
+    /* The docs tools, Search and the theme toggle, take the room the nav leaves, set against the
+       Atlas link on the right, half a rem apart. */
+    .docs-header__tools {
+      display: flex;
+      flex: 1 1 auto;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+
+    /* Search takes what the toggle leaves. It is a size container, so its button can fit that room
+       (the utility layer, below). */
+    .docs-header__search {
+      container: docs-search / inline-size;
+      display: flex;
+      flex: 1 1 auto;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    /* The magnifier keeps its size: a flex item, it would otherwise shrink first. */
+    .docs-header__search :global(button[data-open-modal] > svg) {
+      flex: none;
+    }
+
+    .docs-header__nav {
+      display: none;
+    }
+
+    /* The site header's spacing (global.css, .desktop-nav). */
+    .docs-header__nav ul {
+      display: flex;
+      align-items: center;
+      gap: clamp(1rem, 5.9vw - 2.6rem, 2.25rem);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    /* Each item centres its link, as on the site: GitHub's inline-flex link would otherwise take
+       its baseline from the icon and set its label above the others. */
+    .docs-header__nav li {
+      display: flex;
+      align-items: center;
+    }
+
+    /* The site header's labels: Figtree 400 at 1rem in muted. */
+    .docs-header__nav :global(a) {
+      color: var(--color-muted);
+      font-size: 1rem;
+      font-weight: 400;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    /* The current page reads as on the site's header: starlight, no underline. */
+    .docs-header__nav :global(a:hover),
+    .docs-header__nav a[aria-current='page'] {
+      color: var(--color-starlight);
+    }
+
+    .docs-header__nav :global(.github-link) {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.48rem;
+    }
+
+    .docs-header__nav :global(.github-link svg) {
+      width: 1.2rem;
+      height: 1.2rem;
+      fill: currentColor;
+    }
+
+    /* The site's pill (global.css .launch-atlas-cta) in the compact form the site's header takes
+       where its nav first shows (72.01rem to 87rem): the globe, the label and no arrow, a black fill
+       in an aurora rim, and the aurora's glow held still round it, where the site's comes to rest.
+       A shadow, not the site's blurred curtains, which would reach past the bar's row. */
+    .docs-header__atlas {
+      position: relative;
+      isolation: isolate;
+      display: none;
+      flex: none;
+      align-items: center;
+      gap: 0.4rem;
+      min-height: 2.5rem;
+      padding: 0.55rem 0.75rem 0.55rem 0.5rem;
+      border-radius: 999px;
+      box-shadow:
+        -0.55rem 0 1.1rem -0.2rem rgb(114 231 193 / 42%),
+        0 0 1.1rem -0.1rem rgb(18 255 255 / 30%),
+        0.55rem 0 1.1rem -0.2rem rgb(138 92 255 / 42%);
+      color: #f2f8ff;
+      font-size: 0.84rem;
+      font-weight: 720;
+      line-height: 1;
+      text-decoration: none;
+      white-space: nowrap;
+      transition:
+        transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1),
+        box-shadow 260ms ease;
+    }
+
+    .docs-header__atlas::before {
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      border: 1px solid transparent;
+      border-radius: inherit;
+      background:
+        linear-gradient(#000, #000) padding-box,
+        linear-gradient(
+            100deg,
+            rgb(114 231 193 / 70%),
+            rgb(18 255 255 / 45%),
+            rgb(138 92 255 / 70%)
+          )
+          border-box;
+      content: '';
+    }
+
+    .docs-header__atlas:hover,
+    .docs-header__atlas:focus-visible {
+      transform: translateY(-1px);
+      box-shadow:
+        -0.6rem 0 1.3rem -0.1rem rgb(114 231 193 / 55%),
+        0 0 1.3rem 0 rgb(18 255 255 / 40%),
+        0.6rem 0 1.3rem -0.1rem rgb(138 92 255 / 55%);
+    }
+
+    /* The favicon's colour globe, drawn inline at the site pill's compact size (atlas-globe.ts). */
+    .docs-header__atlas-mark {
+      flex: none;
+      width: 1.2rem;
+      height: 1.2rem;
+    }
+
+    .docs-header__atlas-label .brand-name {
+      font-weight: 400;
+    }
+
+    /* The arrow shows wherever the site pill's does: everywhere but the site's compact range (below). */
+    .docs-header__atlas-arrow {
+      display: block;
+      flex: none;
+      width: 1rem;
+      height: 1rem;
+      fill: none;
+      stroke: #70e6ff;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2.2;
+      transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    }
+
+    .docs-header__atlas:hover .docs-header__atlas-arrow,
+    .docs-header__atlas:focus-visible .docs-header__atlas-arrow {
+      transform: translateX(3px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .docs-header__atlas,
+      .docs-header__atlas-arrow {
+        transition: none;
+      }
+    }
+
+    @media (forced-colors: active) {
+      .docs-header__atlas {
+        box-shadow: none;
+      }
+
+      .docs-header__atlas::before {
+        border-color: ButtonText;
+        background: Canvas;
+      }
+
+      .docs-header__atlas-arrow {
+        stroke: ButtonText;
+      }
+    }
+
+    @media (min-width: 50em) {
+      /* The site's compact lockup: 2.6rem tall, so calc(2.6rem * 1395 / 300) wide (global.css). */
+      .docs-header__lockup {
+        height: 2.6rem;
+      }
+
+      .docs-header__atlas {
+        display: inline-flex;
+      }
+
+      .docs-header__nav {
+        display: block;
+      }
+
+      .docs-header__nav li:not(.docs-header__github) {
+        display: none;
+      }
+    }
+
+    /* The whole nav, set after the lockup with the site header's room (global.css): the row gap
+       (1.25rem), and after the lockup the rest of the landing lockup's slot, which the site's
+       brand slot keeps when its header is compact, then the nav's own margin. */
+    @media (min-width: 72em) {
+      .docs-header {
+        gap: 1.25rem;
+      }
+
+      .docs-header__home {
+        margin-inline-end: calc((3.6rem - 2.6rem) * 1395 / 300);
+      }
+
+      .docs-header__nav {
+        margin-inline-start: clamp(0rem, 9.7vw - 6.22rem, 2.25rem);
+      }
+
+      .docs-header__nav li:not(.docs-header__github) {
+        display: flex;
+      }
+    }
+
+    /* Where the whole nav first shows, the bare magnifier and the toggle need about 45 px more than
+       the row leaves: the gaps close to half a rem (the lockup's slot grows by what its gap gave
+       up, so the nav does not move) and the Atlas link takes the site pill's type size. */
+    @media (72em <= width < 78em) {
+      .docs-header {
+        gap: 0.5rem;
+      }
+
+      .docs-header__home {
+        margin-inline-end: calc((3.6rem - 2.6rem) * 1395 / 300 + 0.75rem);
+      }
+    }
+
+    /* The site's whole pill, with its arrow, wherever the site's pill is whole: below 72em and from
+       87em (global.css, .launch-atlas-cta). Between, its compact form, as the site's: the globe and
+       the label. Search, a size container, gives the arrow its room. */
+    .docs-header__atlas {
+      padding-right: 0.95rem;
+    }
+
+    @media (72em <= width <= 87em) {
+      .docs-header__atlas {
+        padding-right: 0.75rem;
+      }
+
+      .docs-header__atlas-arrow {
+        display: none;
+      }
+    }
+
+    /* "Menu +" from 50em to 72em, where site pages show it beside the pill: the site's disclosure
+       (global.css, .mobile-nav) with the four page links, at the bar's right edge. */
+    .docs-menu {
+      position: relative;
+      display: none;
+      flex: none;
+    }
+
+    @media (50em <= width < 72em) {
+      .docs-menu {
+        display: block;
+      }
+    }
+
+    /* Where the bar is narrowest beside the sidebar (50em to 56em), GitHub keeps its mark and its
+       name ("View genomeOS on GitHub") and gives its word's room to Search, which "Menu +" and the
+       pill's arrow would otherwise squeeze below its 44 px target. */
+    @media (50em <= width < 56em) {
+      .docs-header__nav :global(.github-link) {
+        justify-content: center;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+      }
+
+      .docs-header__nav :global(.github-link span) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+    }
+
+    .docs-menu summary {
+      display: flex;
+      align-items: center;
+      min-height: 2.75rem;
+      padding-inline: 0.15rem;
+      color: var(--color-starlight);
+      font-size: 1rem;
+      font-weight: 650;
+      list-style: none;
+      cursor: pointer;
+    }
+
+    .docs-menu summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .docs-menu summary::after {
+      margin-left: 0.5rem;
+      color: var(--color-ion);
+      content: '+' / '';
+    }
+
+    .docs-menu[open] summary::after {
+      content: '−' / '';
+    }
+
+    .docs-menu nav {
+      position: absolute;
+      top: 2.9rem;
+      right: 0;
+      width: 19rem;
+      padding: 1.2rem;
+      border: 1px solid var(--color-line);
+      background: var(--color-orbit);
+      box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 44%);
+    }
+
+    .docs-menu ul {
+      display: grid;
+      gap: 0.8rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    /* 44 px targets made of padding that takes no room, as the site's: the link is inline. */
+    .docs-menu a {
+      position: relative;
+      padding-block: 0.6rem;
+      color: var(--color-starlight);
+      font-size: 1rem;
+      text-decoration: none;
+    }
+
+    .docs-menu a:hover {
+      color: var(--color-ion);
+    }
+
+    /* The current page, as the site's Menu marks it: ion, with a square side rule at the panel's
+       inner edge. */
+    .docs-menu a[aria-current='page'] {
+      color: var(--color-ion);
+    }
+
+    .docs-menu a[aria-current='page']::before {
+      position: absolute;
+      top: 0.4rem;
+      bottom: 0.4rem;
+      left: -1.2rem;
+      border-left: 3px solid var(--color-ion);
+      content: '';
+    }
+
+    @media (forced-colors: active) {
+      .docs-menu summary::after {
+        color: ButtonText;
+      }
+    }
+
+    /* A phone bar: the lockup gives way so Search and "Menu +" keep their room (the site's phone
+       header does the same, global.css). */
+    @media (max-width: 49.99em) {
+      .docs-header__lockup {
+        width: min(
+          calc(2rem * 1395 / 300),
+          100vw - 2 * var(--sl-nav-pad-x) - 9.6rem
+        );
+        height: auto;
+      }
+    }
+  }
+
+  /* Search's button in the room the nav leaves (Contact page spec §1). Whole, it needs about 9.1rem
+     with "Ctrl K" (8.5rem with "⌘ K"), and without the key hint about 6rem; each step keeps a
+     little slack for font metrics. This sits in Starlight's utility layer, after the md:sl-flex and
+     md:sl-block utilities that would otherwise show the hint and the label again. From 50em only:
+     below that Starlight already shows the bare magnifier. */
+  @layer starlight.utils {
+    @media (min-width: 50em) {
+      @container docs-search (max-width: 9.5rem) {
+        .docs-header__search :global(button[data-open-modal] > kbd) {
+          display: none;
+        }
+      }
+
+      /* Just the magnifier, in the outlined square: 2.5rem, as tall as before, so 45 px across. */
+      @container docs-search (max-width: 6.5rem) {
+        .docs-header__search :global(button[data-open-modal]) {
+          justify-content: center;
+          width: 2.5rem;
+          padding-inline: 0;
+        }
+
+        .docs-header__search :global(button[data-open-modal] > span) {
+          display: none;
+        }
+      }
+    }
+  }
+</style>

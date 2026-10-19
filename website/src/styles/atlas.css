@@ -491,7 +491,8 @@ html.atlas-page .site-header--compact .site-header__inner {
   font-size: 0.86rem;
 }
 
-.atlas-earth-picker__detail span {
+/* The provider only: a wordmark inside the label keeps the label's colour. */
+.atlas-earth-picker__detail > div > span {
   color: #9eb3c9;
   text-align: right;
 }
@@ -1929,6 +1930,54 @@ html.atlas-page .site-header--compact .site-header__inner {
   pointer-events: auto;
 }
 
+/* The cookie settings icon (#422, AtlasCookieSettings.tsx) stands in for the
+ * site's corner icon on /app/: quiet at rest like it (CookieControl.astro).
+ * Desktop docks it in the explorer's bottom-left corner, under the controls
+ * dock, which ends one icon higher; phones dock it in the data credit row. */
+.atlas-cookie-settings {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(112 230 255 / 22%);
+  border-radius: 50%;
+  background: rgb(7 24 49 / 72%);
+  color: rgb(220 232 246 / 62%);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.atlas-cookie-settings:hover,
+.atlas-cookie-settings:focus-visible,
+.atlas-cookie-settings[aria-expanded='true'] {
+  border-color: rgb(112 230 255 / 55%);
+  background: rgb(7 24 49 / 94%);
+  color: var(--color-starlight);
+}
+
+.atlas-cookie-settings:focus-visible {
+  border-radius: 50%;
+}
+
+.atlas-cookie-settings--corner {
+  position: absolute;
+  z-index: 4;
+  bottom: 1rem;
+  left: max(1rem, env(safe-area-inset-left));
+}
+
+.atlas-cookie-settings--credit {
+  display: none;
+}
+
+@media (min-width: 52.01rem) {
+  .atlas-explorer:has(> .atlas-cookie-settings--corner) .atlas-controls {
+    bottom: calc(1rem + 28px + 0.5rem);
+  }
+}
+
 .atlas-data-credit__short,
 .atlas-legend__label-short,
 .atlas-legend__heading-metric {
@@ -2271,9 +2320,9 @@ body:has(.atlas-explorer) .skip-link {
  * preference blocks so reduced motion, high contrast and coarse pointers
  * still win over them (§A.1.12). */
 @media (max-width: 52rem) {
+  /* 0.96rem tall is ~105 px wide: the room the old 1rem text wordmark took. */
   body:has(.atlas-explorer) .wordmark {
-    font-size: 1rem;
-    letter-spacing: 0.08em;
+    --wordmark-height: 0.96rem;
   }
 
   body:has(.atlas-explorer) .site-header__actions {
@@ -2809,6 +2858,28 @@ body:has(.atlas-explorer) .skip-link {
     pointer-events: auto;
   }
 
+  /* The cookie settings icon ends the credit row without growing it: the
+   * docked stack's height is what keeps the globe's centre clear (§A.1.3).
+   * Its 20 px circle overhangs the 16 px line by 3 px up and 1 px down (inside
+   * the row's bottom padding, so never onto the sheet), and a 24 px circle
+   * around it reaches no other target (WCAG 2.5.8 spacing). */
+  .atlas-cookie-settings--corner {
+    display: none;
+  }
+
+  .atlas-cookie-settings--credit {
+    width: 20px;
+    height: 20px;
+    margin: -3px 0 -1px 0.45rem;
+    display: inline-grid;
+    vertical-align: top;
+  }
+
+  .atlas-cookie-settings--credit .cookie-glyph {
+    width: 12px;
+    height: 12px;
+  }
+
   .atlas-data-credit__long {
     display: none;
   }
@@ -2889,6 +2960,20 @@ body:has(.atlas-explorer) .skip-link {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The duration below shortens the transitions the explorer declares, which
+   * all name their properties. transition-property defaults to all, so on
+   * every other element it would turn each state change into a transition
+   * that ends only on a later frame. The scene's lift under an open credit
+   * lightbox waited for one, with the top slot over the close button, for
+   * seconds on a busy main thread (#455). :where() keeps this default under
+   * every declared transition; pseudo-elements stay outside it, where they
+   * are valid. */
+  :where(.atlas-explorer *),
+  :where(.atlas-explorer *)::before,
+  :where(.atlas-explorer *)::after {
+    transition-property: none;
+  }
+
   .atlas-explorer *,
   .atlas-explorer *::before,
   .atlas-explorer *::after {

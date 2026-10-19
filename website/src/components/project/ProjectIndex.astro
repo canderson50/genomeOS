@@ -1,0 +1,52 @@
+---
+/**
+ * The project index (round 2 spec §4.2.1; R2-4; #454), Projects' lead figure: the Foundation's
+ * projects as a compact list, two entries abreast (2fr : 1fr), one column below 52rem.
+ *
+ *   genomeOS Atlas   the name (a link to its chapter below), its status "Live, in development"
+ *                    (aurora: now) and one line on what it is
+ *   Next project     "More to come" (violet dashes: future), one line, and "Share an idea ↗" to
+ *                    GitHub Discussions: no future project is named, because none is decided
+ *
+ * No mark, no button and no "Read more" (design critique of the integrated build): the Atlas
+ * overview opens right below with the product itself and the one "Open the genomeOS Atlas" pill,
+ * so the index only says what exists. Entry names are styled paragraphs, so "genomeOS Atlas" is
+ * not a second heading beside the chapter's h2.
+ */
+import { GITHUB_REPOSITORY } from '../../data/nav';
+---
+
+<figure
+  class="pidx"
+  data-graphic="project-index"
+  aria-labelledby="pidx-caption"
+>
+  <figcaption class="visually-hidden" id="pidx-caption">
+    Our projects: the <span class="brand-name">genomeOS</span> Atlas, live and in
+    development, and the next project, still to come.
+  </figcaption>
+  <ul class="pidx__list" data-figure-stage aria-label="Our projects">
+    <li class="pidx__item pidx__item--live">
+      <p class="pidx__name">
+        <a href="#atlas"><span class="brand-name">genomeOS</span> Atlas</a>
+      </p>
+      <p class="pidx__status pidx__status--live">Live, in development</p>
+      <p class="pidx__text">
+        Scattered genetic data, placed and modeled on one open map.
+      </p>
+    </li>
+    <li class="pidx__item pidx__item--next">
+      <p class="pidx__name">Next project</p>
+      <p class="pidx__status pidx__status--future">More to come</p>
+      <p class="pidx__text">
+        Every project starts as a community idea. <a
+          class="pidx__share"
+          href={`${GITHUB_REPOSITORY}/discussions`}
+          target="_blank"
+          rel="noopener noreferrer"
+          >Share an idea<span aria-hidden="true">&nbsp;↗</span></a
+        >
+      </p>
+    </li>
+  </ul>
+</figure>

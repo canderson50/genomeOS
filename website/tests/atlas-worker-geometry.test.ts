@@ -13,10 +13,8 @@ import {
   buildEdgeChunk,
   edgeCapacity,
 } from '../src/atlas/geometry/edge-buffers';
-import {
-  naturalEarthHeights,
-  parseNaturalEarth,
-} from '../src/atlas/geometry/natural-earth';
+import { naturalEarthHeights } from '../src/atlas/geometry/natural-earth';
+import { decodeNaturalEarth } from '../src/atlas/geometry/natural-earth-codec';
 import { buildSurfaceChunk } from '../src/atlas/geometry/surface-buffers';
 import { buildGridTopology } from '../src/atlas/geometry/topology';
 import type {
@@ -30,6 +28,7 @@ import {
   type GeometryWorkerContext,
 } from '../src/atlas/worker/geometry-handlers';
 import { PARITY_DIR, surfaceFixturesIn } from './helpers/atlas-geometry';
+import { encodeRings } from './support/borders-builder';
 import {
   fixtureBytes,
   goldenBytes,
@@ -136,8 +135,12 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
       expect(new Set(transfer).size).toBe(transfer.length);
       expect(transfer).toContain(message.surface.positions.buffer);
       expect(transfer).toContain(message.surface.indices.buffer);
-      if (message.support.unknown)
+      if (message.support.unknown) {
         expect(transfer).toContain(message.support.unknown.st.buffer);
+        expect(transfer).toContain(message.support.unknown.cellCentres.buffer);
+      }
+      for (const { buffers } of message.support.priorDominated)
+        expect(transfer).toContain(buffers.cellCentres.buffer);
     }
     expect(posted.at(-1)!.message).toEqual({
       artifactKey: ARTIFACT_KEY,
@@ -145,6 +148,20 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
       total: chunks.length,
       type: 'chunks-done',
     });
+  });
+
+  it('transfers the cell centres of flat surface chunks (#453)', async () => {
+    const { fixture, posted, worker } = harness();
+    await worker.handlers['build-chunks']({
+      ...request(fixture.grid.gridSha256),
+      geometry: 'hexagons',
+    });
+    const chunks = ofType(posted, 'chunk');
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const { message, transfer } of chunks) {
+      expect(message.surface.cellCentres).toBeInstanceOf(Float32Array);
+      expect(transfer).toContain(message.surface.cellCentres!.buffer);
+    }
   });
 
   it('times topology once per grid and mesh and support per chunk', async () => {
@@ -277,35 +294,30 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
 
   it('parses Natural Earth and later returns its surface heights', async () => {
     const { fixture, posted, render, worker } = harness();
-    const geojson = {
-      features: [
-        {
-          geometry: {
-            coordinates: [
-              [
-                [36.8, 54.1],
-                [37.5, 54.1],
-                [37.5, 55],
-                [36.8, 54.1],
-              ],
+    const borders = encodeRings([
+      {
+        polygons: [
+          [
+            [
+              [36.8, 54.1],
+              [37.5, 54.1],
+              [37.5, 55],
+              [36.8, 54.1],
             ],
-            type: 'Polygon',
-          },
-          properties: { LABEL_X: 37, LABEL_Y: 54.5, NAME_LONG: 'Fixture' },
-          type: 'Feature',
-        },
-      ],
-      type: 'FeatureCollection',
-    };
-    const json = new TextEncoder().encode(JSON.stringify(geojson))
-      .buffer as ArrayBuffer;
+          ],
+        ],
+        properties: { LABEL_X: 37, LABEL_Y: 54.5, NAME_LONG: 'Fixture' },
+      },
+    ]);
     await worker.handlers['parse-context']({
+      bytes: borders.slice().buffer,
       id: 12,
-      json,
       type: 'parse-context',
     });
     const [ready] = ofType(posted, 'context-ready');
-    expect(ready.message.buffers).toEqual(parseNaturalEarth(geojson));
+    const decoded = decodeNaturalEarth(borders.slice().buffer);
+    expect(ready.message.buffers).toEqual(decoded);
+    expect(ready.message.buffers.labels).toHaveLength(1);
     await worker.handlers['context-heights']({
       artifactKey: ARTIFACT_KEY,
       id: 13,
@@ -314,7 +326,7 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
     });
     const [heights] = ofType(posted, 'context-heights-ready');
     expect(heights.message).toMatchObject(
-      naturalEarthHeights(parseNaturalEarth(geojson), {
+      naturalEarthHeights(decoded, {
         domain: render.artifact.metric_domains.post_mean,
         grid: fixture.grid as DecodedGrid,
         support: render.support,
@@ -334,15 +346,17 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
       id: 7,
       type: 'error',
     });
+    // GeoJSON where the compact borders belong, as a stale cache could hand it over.
     await worker.handlers['parse-context']({
-      id: 14,
-      json: new TextEncoder().encode('{"type":"Feature"}')
+      bytes: new TextEncoder().encode('{"type":"Feature"}')
         .buffer as ArrayBuffer,
+      id: 14,
       type: 'parse-context',
     });
     expect(posted.at(-1)!.message).toMatchObject({
       code: 'validation',
       id: 14,
+      message: 'GOBD magic is missing',
       type: 'error',
     });
   });
@@ -412,29 +426,22 @@ describe('AtlasWorkerClient geometry requests through the dispatcher (fast-load 
     expect(recoloured).toHaveLength(built.length);
     expect(recoloured.every(({ anchors }) => anchors === null)).toBe(true);
 
-    const geojson = {
-      features: [
-        {
-          geometry: {
-            coordinates: [
-              [
-                [0, 0],
-                [1, 0],
-                [1, 1],
-                [0, 0],
-              ],
+    const borders = encodeRings([
+      {
+        polygons: [
+          [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 0],
             ],
-            type: 'Polygon',
-          },
-          properties: { LABEL_X: 0.5, LABEL_Y: 0.5, NAME_LONG: 'Fixture' },
-          type: 'Feature',
-        },
-      ],
-      type: 'FeatureCollection',
-    };
-    const parsed = await client.parseContext(
-      new TextEncoder().encode(JSON.stringify(geojson)).buffer as ArrayBuffer,
-    );
+          ],
+        ],
+        properties: { LABEL_X: 0.5, LABEL_Y: 0.5, NAME_LONG: 'Fixture' },
+      },
+    ]);
+    const parsed = await client.parseContext(borders.buffer);
     expect(parsed.labels).toHaveLength(1);
     const heights = await client.contextHeights({
       artifactKey: body.artifactKey,

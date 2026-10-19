@@ -18,34 +18,38 @@ function fakeEvent() {
   };
 }
 
-const viewers = vi.hoisted(
+const globes = vi.hoisted(
   () =>
     [] as {
-      options: Record<string, unknown>;
-      scene: { renderError: FakeEvent };
-      resize: ReturnType<typeof vi.fn>;
-      render: ReturnType<typeof vi.fn>;
+      container: unknown;
+      widget: {
+        scene: { renderError: FakeEvent };
+        resize: ReturnType<typeof vi.fn>;
+        render: ReturnType<typeof vi.fn>;
+      };
       destroy: ReturnType<typeof vi.fn>;
     }[],
 );
 
-vi.mock('cesium', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('cesium')>()),
-  Viewer: class {
-    readonly scene = {
-      primitives: { add: vi.fn() },
-      renderError: fakeEvent(),
-      requestRender: vi.fn(),
+// The scene renders through the engine CesiumWidget that globe-widget builds (issue #446).
+vi.mock('../src/atlas/scene/globe-widget', () => ({
+  createGlobeWidget: (container: unknown) => {
+    const globe = {
+      container,
+      widget: {
+        scene: {
+          primitives: { add: vi.fn() },
+          renderError: fakeEvent(),
+          requestRender: vi.fn(),
+        },
+        camera: { moveEnd: fakeEvent() },
+        resize: vi.fn(),
+        render: vi.fn(),
+      },
+      destroy: vi.fn(),
     };
-    readonly camera = { moveEnd: fakeEvent() };
-    readonly resize = vi.fn();
-    readonly render = vi.fn();
-    readonly destroy = vi.fn();
-    readonly options: Record<string, unknown>;
-    constructor(_container: unknown, options: Record<string, unknown>) {
-      this.options = options;
-      viewers.push(this);
-    }
+    globes.push(globe);
+    return globe;
   },
 }));
 vi.mock('../src/atlas/scene/context-controller', () => ({
@@ -84,6 +88,36 @@ vi.mock('../src/atlas/scene/camera', async (importOriginal) => ({
   bindKeyboardCamera: () => () => {},
   setCameraState: () => {},
 }));
+// The reveal wave (#453) as the scene drives it: the scene it was given and its teardown.
+const waves = vi.hoisted(
+  () =>
+    [] as {
+      scene: unknown;
+      destroy: ReturnType<typeof vi.fn>;
+    }[],
+);
+vi.mock('../src/atlas/scene/reveal-wave-driver', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../src/atlas/scene/reveal-wave-driver')
+  >()),
+  createRevealWave: (options: { scene: unknown }) => {
+    const wave = { destroy: vi.fn(), scene: options.scene };
+    waves.push(wave);
+    return {
+      destroy: wave.destroy,
+      finish: () => {},
+      onChange: () => () => {},
+      reveal: () => 1,
+      running: () => false,
+      start: () => {},
+      uniforms: {},
+    };
+  },
+}));
+vi.mock('../src/atlas/scene/globe-offset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/atlas/scene/globe-offset')>()),
+  installGlobeOffset: () => ({ destroy: () => {}, setCoveredLeft: () => {} }),
+}));
 vi.mock('../src/atlas/scene/picking', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/atlas/scene/picking')>()),
   bindAtlasPicking: () => () => {},
@@ -103,18 +137,21 @@ function runFrame(): void {
   for (const [, callback] of pending) callback();
 }
 
+const container = {} as HTMLElement;
+
 function scene() {
-  const controller = createAtlasScene({} as HTMLElement, {
+  const controller = createAtlasScene(container, {
     frameBudgetMs: 8,
-    naturalEarthUrl: 'ne.geojson',
+    naturalEarthUrl: 'borders.bin',
     worker: {} as AtlasWorkerClient,
   });
-  const viewer = viewers.at(-1)!;
-  return { controller, viewer };
+  const globe = globes.at(-1)!;
+  return { controller, globe, widget: globe.widget };
 }
 
 beforeEach(() => {
-  viewers.length = 0;
+  globes.length = 0;
+  waves.length = 0;
   frames = new Map();
   nextFrame = 1;
   vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
@@ -134,24 +171,22 @@ afterEach(() => {
 
 describe('Atlas render loop (Cesium globe design §12)', () => {
   it('owns the Cesium loop and renders each animation frame', () => {
-    const { viewer } = scene();
-    expect(viewer.options).toMatchObject({
-      showRenderLoopErrors: false,
-      useDefaultRenderLoop: false,
-    });
+    // globe-widget turns Cesium's loop and error panel off (tests/atlas-globe-widget.test.ts).
+    const { globe, widget } = scene();
+    expect(globe.container).toBe(container);
     runFrame();
     runFrame();
-    expect(viewer.resize).toHaveBeenCalledTimes(2);
-    expect(viewer.render).toHaveBeenCalledTimes(2);
+    expect(widget.resize).toHaveBeenCalledTimes(2);
+    expect(widget.render).toHaveBeenCalledTimes(2);
     expect(frames.size).toBe(1);
   });
 
   it('reports an error thrown outside Scene.render once and stops rendering', () => {
     // A throwing postRender or camera moveEnd listener escapes Scene.render's own catch, so
     // Cesium never raises scene.renderError for it.
-    const { controller, viewer } = scene();
+    const { controller, widget } = scene();
     const failure = new Error('a postRender listener threw');
-    viewer.render.mockImplementation(() => {
+    widget.render.mockImplementation(() => {
       throw failure;
     });
     const listener = vi.fn();
@@ -163,11 +198,11 @@ describe('Atlas render loop (Cesium globe design §12)', () => {
   });
 
   it('reports scene.renderError once, even when it is raised again', () => {
-    const { controller, viewer } = scene();
+    const { controller, widget } = scene();
     const first = new Error('worker import failed');
-    viewer.render.mockImplementation(() => {
-      viewer.scene.renderError.raiseEvent({}, first);
-      viewer.scene.renderError.raiseEvent(
+    widget.render.mockImplementation(() => {
+      widget.scene.renderError.raiseEvent({}, first);
+      widget.scene.renderError.raiseEvent(
         {},
         new Error('the same frame again'),
       );
@@ -177,30 +212,44 @@ describe('Atlas render loop (Cesium globe design §12)', () => {
     runFrame();
     runFrame();
     expect(listener).toHaveBeenCalledExactlyOnceWith(first);
-    expect(viewer.render).toHaveBeenCalledOnce();
+    expect(widget.render).toHaveBeenCalledOnce();
     expect(frames.size).toBe(0);
   });
 
   it('replays the error to a late listener and honours unsubscribe', () => {
-    const { controller, viewer } = scene();
+    const { controller, widget } = scene();
     const removed = vi.fn();
     controller.onRenderError(removed)();
     const failure = new Error('lost');
-    viewer.scene.renderError.raiseEvent({}, failure);
+    widget.scene.renderError.raiseEvent({}, failure);
     expect(removed).not.toHaveBeenCalled();
     const late = vi.fn();
     controller.onRenderError(late);
     expect(late).toHaveBeenCalledExactlyOnceWith(failure);
   });
 
+  it('drives the reveal wave from the widget scene and tears it down before the widget (#447, #453)', () => {
+    const { controller, globe, widget } = scene();
+    expect(waves).toHaveLength(1);
+    const [wave] = waves;
+    expect(wave.scene).toBe(widget.scene);
+    controller.destroy();
+    expect(wave.destroy).toHaveBeenCalledOnce();
+    expect(globe.destroy).toHaveBeenCalledOnce();
+    // The wave unsubscribes from the scene's preUpdate and postRender while the scene still exists.
+    expect(wave.destroy.mock.invocationCallOrder[0]).toBeLessThan(
+      globe.destroy.mock.invocationCallOrder[0],
+    );
+  });
+
   it('cancels its frame and reports nothing after destroy', () => {
-    const { controller, viewer } = scene();
+    const { controller, globe, widget } = scene();
     const listener = vi.fn();
     controller.onRenderError(listener);
-    const renderError = viewer.scene.renderError;
+    const renderError = widget.scene.renderError;
     controller.destroy();
     expect(frames.size).toBe(0);
-    expect(viewer.destroy).toHaveBeenCalledOnce();
+    expect(globe.destroy).toHaveBeenCalledOnce();
     renderError.raiseEvent({}, new Error('after destroy'));
     expect(listener).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();

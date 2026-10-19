@@ -3,6 +3,12 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 import {
+  canvasCentre,
+  GLOBE_DISC_QUERY,
+  measureGlobeDisc,
+  waitForSettledGlobe,
+} from './atlas-globe-helpers';
+import {
   canvasCoverage,
   centreOf,
   controlsSheet,
@@ -14,7 +20,9 @@ import {
   panelSheet,
   PHONE_PROFILES,
   recordedLegendLoading,
+  recordedLegendRowAtReady,
   recordLegendLoading,
+  recordLegendRowAtReady,
   setSheetState,
   sheetGeometry,
   skipUnlessProject,
@@ -25,6 +33,7 @@ import {
   touchDrag,
   uncoveredCredits,
   waitForAtlasReady,
+  waitForAtlasSettled,
 } from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
 
@@ -217,15 +226,150 @@ for (const phone of PHONE_PROFILES) {
       }) => {
         await page.goto(route);
         if (route === '/app/') await waitForAtlasReady(page);
-        const fit = await page.evaluate(() => ({
-          clientWidth: document.documentElement.clientWidth,
-          scale: window.visualViewport?.scale ?? 1,
-          scrollWidth: document.documentElement.scrollWidth,
-        }));
+        const fit = await page.evaluate(() => {
+          // /docs/ is a Starlight page with its own header.
+          const header = document.querySelector('.site-header__inner');
+          return {
+            clientWidth: document.documentElement.clientWidth,
+            headerClientWidth: header?.clientWidth ?? 0,
+            headerScrollWidth: header?.scrollWidth ?? 0,
+            scale: window.visualViewport?.scale ?? 1,
+            scrollWidth: document.documentElement.scrollWidth,
+          };
+        });
         expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth);
+        expect(fit.headerScrollWidth).toBeLessThanOrEqual(
+          fit.headerClientWidth,
+        );
         expect(fit.scale).toBe(1);
       });
     }
+
+    test('draws the globe at the canvas centre: the controls sheet does not offset it (#452)', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${GLOBE_DISC_QUERY}`);
+      await waitForAtlasReady(page);
+      await waitForSettledGlobe(page);
+      // A chord 20 px above the sheet and the strips docked on it, which can reach the canvas
+      // centre: every chord of the disc is bisected by its vertical diameter.
+      const offCentre = async () => {
+        const above = await page.evaluate(() => {
+          const canvas = document
+            .querySelector('.atlas-scene canvas')!
+            .getBoundingClientRect();
+          const tops = [
+            'aside.atlas-controls',
+            '.atlas-legend',
+            '.atlas-data-credit',
+            '.atlas-scene .cesium-viewer-bottom',
+          ].flatMap((selector) => {
+            const box = document
+              .querySelector(selector)
+              ?.getBoundingClientRect();
+            return box && box.height > 0 ? [box.top] : [];
+          });
+          return Math.max(
+            0,
+            canvas.top + canvas.height / 2 - (Math.min(...tops) - 20),
+          );
+        });
+        return Math.abs(
+          (await measureGlobeDisc(page, above)).centreX -
+            (await canvasCentre(page)).x,
+        );
+      };
+      await expect.poll(offCentre).toBeLessThanOrEqual(4);
+      await setSheetState(controlsSheet(page), 'half');
+      // The docked strips follow the sheet a frame later; measure once they have.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      await expect.poll(offCentre).toBeLessThanOrEqual(4);
+    });
+
+    test('the site header fits the FOUNDATION lockup beside genomeOS Atlas and Menu', async ({
+      page,
+    }) => {
+      await page.goto('/');
+      const header = page.locator('[data-site-header]');
+      const measure = () =>
+        page.evaluate(() => {
+          const box = (selector: string) =>
+            document.querySelector(selector)!.getBoundingClientRect();
+          const inner = document.querySelector('.site-header__inner')!;
+          const logo = box('.wordmark__logo');
+          return {
+            clientWidth: inner.clientWidth,
+            ctaLeft: box('.launch-atlas-cta').left,
+            innerRight: inner.getBoundingClientRect().right,
+            logoHeight: logo.height,
+            logoRight: logo.right,
+            menuRight: box('.mobile-nav summary').right,
+            scrollWidth: inner.scrollWidth,
+            viewport: window.innerWidth,
+          };
+        });
+      const fits = (row: Awaited<ReturnType<typeof measure>>) => {
+        expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
+        // At least the 1rem (18 px) gap before genomeOS Atlas.
+        expect(row.ctaLeft - row.logoRight).toBeGreaterThanOrEqual(17.5);
+        expect(row.menuRight).toBeLessThanOrEqual(row.innerRight + 0.5);
+      };
+
+      const landing = await measure();
+      fits(landing);
+      // FOUNDATION capitals: 41.1 of the lockup's 300 units of height. They
+      // reach 5 px from a 390 px phone up (4.9 px at 360 px).
+      const foundation = (landing.logoHeight * 41.11) / 300;
+      expect(foundation).toBeGreaterThanOrEqual(
+        landing.viewport >= 390 ? 5 : 4.8,
+      );
+
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await expect(header).toHaveClass(/site-header--compact/);
+      await expect
+        .poll(async () => (await measure()).logoHeight)
+        .toBeCloseTo(landing.logoHeight * 0.9, 0);
+      fits(await measure());
+    });
+
+    test('the header shows genomeOS Atlas as its globe mark alone, still named, with no caption', async ({
+      page,
+    }) => {
+      await page.goto('/');
+      const atlas = page
+        .locator('[data-site-header]')
+        .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+      await expect(atlas).toBeVisible();
+      await expect(atlas).toHaveAttribute('href', '/app/');
+      await expect(atlas).toHaveAccessibleDescription(
+        'Explore the interactive app',
+      );
+      await expect(atlas.locator('.launch-atlas-cta__mark')).toBeVisible();
+      await expect(atlas.locator('.launch-atlas-cta__arrow')).toBeHidden();
+      // The name is kept for screen readers in a clipped 1 px box, so the
+      // button is about as wide as it is tall.
+      const name = (await atlas
+        .locator('.launch-atlas-cta__label')
+        .boundingBox())!;
+      expect(name.width).toBeLessThanOrEqual(1);
+      const button = (await atlas.boundingBox())!;
+      expect(button.width).toBeLessThan(button.height * 1.2);
+
+      // No caption, from the keyboard or under a pointer.
+      const caption = page.locator('.launch-atlas-cta__caption');
+      await page.locator('.wordmark').focus();
+      await page.keyboard.press('Tab');
+      await expect(atlas).toBeFocused();
+      await expect(caption).toBeHidden();
+      await atlas.hover();
+      await expect(caption).toBeHidden();
+    });
 
     test('the Atlas header keeps the status chip beside a 44 px menu', async ({
       page,
@@ -241,17 +385,25 @@ for (const phone of PHONE_PROFILES) {
         const menu = document
           .querySelector('.mobile-nav summary')!
           .getBoundingClientRect();
+        const logo =
+          document.querySelector<HTMLImageElement>('.wordmark__logo')!;
+        const logoBox = logo.getBoundingClientRect();
         return {
           chipRight: chip.getBoundingClientRect().right,
           clientWidth: inner.clientWidth,
+          headerHeight: document
+            .querySelector('[data-site-header]')!
+            .getBoundingClientRect().height,
+          logoSrc: logo.getAttribute('src'),
           label: label.textContent,
           labelOverflow: getComputedStyle(label).textOverflow,
+          logoHeight: logoBox.height,
+          logoNaturalWidth: logo.naturalWidth,
+          logoWidth: logoBox.width,
           menuHeight: menu.height,
           menuLeft: menu.left,
           menuWidth: menu.width,
           scrollWidth: inner.scrollWidth,
-          wordmarkFont: getComputedStyle(document.querySelector('.wordmark')!)
-            .fontFamily,
         };
       });
       expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth);
@@ -260,7 +412,14 @@ for (const phone of PHONE_PROFILES) {
       expect(header.menuHeight).toBeGreaterThanOrEqual(44);
       expect(header.label).toBe('Atlas ready');
       expect(header.labelOverflow).toBe('ellipsis');
-      expect(header.wordmarkFont).toContain('Raleway');
+      // The logo keeps the ~106 px the old 1rem text wordmark took here: the
+      // Atlas keeps the wordmark crop (no FOUNDATION line) and its 4.75rem bar.
+      expect(header.logoSrc).toBe('/brand/genomeos-wordmark-dark.svg');
+      expect(header.headerHeight).toBeCloseTo(86.5, 0);
+      expect(header.logoNaturalWidth).toBeGreaterThan(0);
+      expect(header.logoWidth).toBeLessThanOrEqual(106);
+      expect(header.logoHeight).toBeGreaterThanOrEqual(16);
+      await expect(page.locator('.wordmark')).toHaveAccessibleName('genomeOS');
       await expect(page.locator('.mobile-nav summary')).toHaveAccessibleName(
         'Menu',
       );
@@ -1733,9 +1892,19 @@ for (const phone of PHONE_PROFILES) {
     test('the legend strip keeps its row and shows the loading status during a cold reveal', async ({
       page,
     }) => {
+      await recordLegendRowAtReady(page);
       await page.goto('/app/');
       await waitForAtlasReady(page);
-      const before = await legendRow(page);
+      // The Natural Earth overlay lands after the reveal (fast-load design
+      // §B.6.9). Its credit once wrapped the credit block the strip docks on
+      // and lifted the row 4 px (#430), so compare the row from the ready
+      // frame with the row after the overlay is drawn.
+      await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+        'data-atlas-context-ready',
+        'true',
+        { timeout: 45_000 },
+      );
+      const before = await recordedLegendRowAtReady(page);
       await markLegendLoading(page);
       // Shown, and in the accessibility tree: getByRole skips hidden nodes.
       const legend = page.getByRole('complementary', { name: 'Map legend' });
@@ -1832,6 +2001,7 @@ for (const phone of PHONE_PROFILES) {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.goto('/app/?basemap=stadia-smooth');
       await waitForAtlasReady(page);
+      await waitForAtlasSettled(page);
       const expand = page.locator('.atlas-scene .cesium-credit-expand-link');
       await expect(expand).toBeVisible();
       // The link wraps, so its bounding-box centre can fall on the canvas: tap
@@ -1868,6 +2038,41 @@ for (const phone of PHONE_PROFILES) {
         page.locator('.atlas-top-slot .atlas-map-catalog__trigger'),
       ).not.toHaveAttribute('aria-expanded', 'true');
       await expect(page.locator('.atlas-scene')).toHaveCSS('z-index', '0');
+    });
+
+    test('the Stadia credit lightbox lifts the scene as it opens, under reduced motion', async ({
+      page,
+    }) => {
+      await page.route('https://tiles.stadiamaps.com/**', (route) =>
+        route.abort(),
+      );
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/?basemap=stadia-smooth');
+      await waitForAtlasReady(page);
+      const expand = page.locator('.atlas-scene .cesium-credit-expand-link');
+      await expect(expand).toBeVisible();
+      // #455: the lift above the chrome must hold in the task that opens or
+      // closes the lightbox. Were it a transition, even a 0.01 ms one, it
+      // would end only on a later frame, and on a busy main thread the top
+      // slot would cover the close button for seconds.
+      const stacking = await expand.evaluate((link) => {
+        const scene = link.closest('.atlas-scene')!;
+        const close = scene.querySelector<HTMLElement>(
+          '.cesium-credit-lightbox-close',
+        )!;
+        const read = () => ({
+          transitions: scene.getAnimations().length,
+          zIndex: getComputedStyle(scene).zIndex,
+        });
+        (link as HTMLElement).click();
+        const open = read();
+        close.click();
+        return { closed: read(), open };
+      });
+      expect(stacking).toEqual({
+        closed: { transitions: 0, zIndex: '0' },
+        open: { transitions: 0, zIndex: '5' },
+      });
     });
 
     for (const panel of ['inspector', 'More info'] as const) {

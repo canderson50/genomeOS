@@ -102,8 +102,24 @@ background; there is a glossary at the end.
 | [Pan-UKB architecture](docs/panukb-architecture.md) | The serving model for the GWAS evidence layer |
 | [Board conventions](docs/board-conventions.md) | Labels, priorities, milestones, automation |
 | [Deployment guide](docs/deployment-gcp.md) · [gcloud wrapper](docs/repo-gcloud-auth.md) | GCP operations |
+| [Data store](docs/data-store.md) | Where the data lives (a public bucket, not git) and how to fetch and verify it |
 | [Dataset assessment (#3)](https://github.com/genomeOS/genomeOS/issues/3) | Every candidate data source, scored — the upstream document for the whole design |
 | [Prior art review (#4)](https://github.com/genomeOS/genomeOS/discussions/4) | Everything that has tried this before, and what is genuinely unbuilt |
+
+## Getting the data
+
+The data is open: the fitted surfaces, validation evidence and curated inputs are in a public data
+store at `https://storage.googleapis.com/genomeos-atlas-data/`, with no credentials needed. Git keeps only a checksummed manifest per release
+(`data/releases/`); the store's own copy is at `manifests/<release>.json` under that URL. Clone
+without the historical data blobs, then fetch what you need:
+
+```bash
+git clone --filter=blob:none https://github.com/genomeOS/genomeOS.git && cd genomeOS
+python scripts/fetch_data.py                 # every file sha256-verified against the manifest
+```
+
+Details, including what is not published yet (trained models, raw third-party harvests), are in
+[the data store guide](docs/data-store.md).
 
 ## Contributing
 
@@ -117,7 +133,7 @@ people who can open doors to datasets.
 3. **Check [the issues](https://github.com/genomeOS/genomeOS/issues?q=is%3Aissue)** — open
    *and* closed. Open issues are the work queue; closed ones record what was already done and
    what was considered and rejected, so search before starting anything.
-4. **Pick something up** from the [project board](https://github.com/users/bschilder/projects/8).
+4. **Pick something up** from the [project board](https://github.com/orgs/genomeOS/projects/1).
    Filter by `skill:*` to find what you can do; `Ready` means fully specified and unblocked, so
    take it without asking.
 

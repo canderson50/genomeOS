@@ -400,7 +400,7 @@ describe('atlas browser contracts', () => {
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
-      schema_version: 1,
+      format_version: '1.0',
     };
 
     const parsed = atlasCatalogSchema.parse(catalog);
@@ -408,7 +408,12 @@ describe('atlas browser contracts', () => {
     expect(parsed.discovery_groups[0].label).toBe('Red blood cell disorders');
     expect(parsed.artifacts[0].discovery.symbol_expansion).toContain('HBB');
     expect(() =>
-      atlasCatalogSchema.parse({ ...catalog, schema_version: 2 }),
+      atlasCatalogSchema.parse({ ...catalog, format_version: '2.0' }),
+    ).toThrow();
+    const { format_version: _, ...unversioned } = catalog;
+    expect(() => atlasCatalogSchema.parse(unversioned)).toThrow();
+    expect(() =>
+      atlasCatalogSchema.parse({ ...unversioned, schema_version: 1 }),
     ).toThrow();
     expect(() =>
       atlasCatalogSchema.parse({
@@ -458,7 +463,7 @@ describe('atlas browser contracts', () => {
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
-      schema_version: 1,
+      format_version: '1.0',
     };
 
     expect(atlasCatalogSchema.parse(catalog).artifacts[0]).toMatchObject({
@@ -600,7 +605,7 @@ describe('atlas browser contracts', () => {
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
-      schema_version: 1,
+      format_version: '1.0',
     };
 
     expect(
@@ -690,7 +695,7 @@ describe('atlas browser contracts', () => {
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
-      schema_version: 1,
+      format_version: '1.0',
     };
     const withArtifact = (changes: Record<string, unknown>) => ({
       ...catalog,
@@ -750,7 +755,7 @@ describe('atlas browser contracts', () => {
             license: 'public_domain',
             revision: 'r1',
             source_url: 'https://example.org/ne.geojson',
-            url: '/ne-50m-admin-0.geojson',
+            url: '/ne-50m-admin-0.borders.bin',
           },
         ],
       },

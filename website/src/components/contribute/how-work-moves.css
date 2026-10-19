@@ -1,0 +1,658 @@
+/*
+ * How work moves (round 2 spec §4.3.4, §0.4, §8; R2-8; #454): GitHub's project board in its own dark
+ * UI (Primer dark) inside the site's square mechanism plate, the astronauts' floor under the columns,
+ * the phone's column buttons, and the milestone rail. HowWorkMoves.astro imports it. The heading,
+ * legend and docs link use the page's own type (.contribute-head, .contribute-h2, .contribute-legend,
+ * .contribute-more in contribute.css).
+ *
+ * Inside the mock only: GitHub's 6 px radii, its colours (canvas #0d1117, panels #161b22, borders
+ * #30363d, text #e6edf3, muted #7d8590 at 4.64:1 on panels) and its type sizes set in Figtree, never
+ * under 13 px. The grid's 12 px pad and 8 px gaps are the floor's geometry (board-layout.ts PAD,
+ * GAP); the floor band's height and lift are FLOOR_H and FLOOR_LIFT there.
+ */
+
+.wb {
+  --gh-canvas: #0d1117;
+  --gh-panel: #161b22;
+  --gh-border: #30363d;
+  --gh-text: #e6edf3;
+  --gh-muted: #7d8590;
+  --gh-accent: #1f6feb;
+  --gh-floor-h: 206px;
+}
+
+/* ---------- the header: the board's title, and the scene's Pause and Replay ---------- */
+
+.wb > .wb-head {
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.35rem 0.5rem 0.2rem 1rem;
+  border-bottom: 0;
+  background: var(--gh-canvas);
+}
+
+.wb-head__title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  color: var(--gh-text);
+  font-size: 16px;
+  font-weight: 620;
+  line-height: 1.3;
+}
+
+.wb .gh-i {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* ---------- the board ---------- */
+
+.gh {
+  position: relative;
+  min-width: 0;
+  background: var(--gh-canvas);
+  color: var(--gh-text);
+  font-family: var(--font-body);
+}
+
+.gh-tabs {
+  display: flex;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--gh-border);
+}
+
+.gh-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 8px 9px;
+  box-shadow: inset 0 -2px 0 #f78166;
+  color: var(--gh-text);
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 20px;
+}
+
+.gh-scroll {
+  position: relative;
+  overflow: hidden;
+  container: wb-track / inline-size;
+}
+
+/* Below 64rem, where the columns scroll by hand, a keyboard can focus the track (WCAG 2.1.1). */
+.gh-scroll:focus-visible {
+  outline: 2px solid var(--color-ion);
+  outline-offset: -2px;
+}
+
+.gh-pan,
+.gh-track {
+  position: relative;
+}
+
+.gh-cols {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.gh-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--gh-border);
+  border-radius: 6px;
+  background: var(--gh-panel);
+}
+
+.gh-col__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 2px 12px;
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 20px;
+}
+
+.gh-col__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gh-count {
+  display: inline-grid;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 2em;
+  background: rgb(110 118 129 / 40%);
+  color: var(--gh-text);
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.gh-count > span {
+  grid-area: 1 / 1;
+}
+
+.gh-col__kebab {
+  display: flex;
+  margin-left: auto;
+}
+
+.gh-col__line {
+  margin: 0;
+  padding: 0 12px 8px;
+  color: var(--gh-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.gh-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.gh-card {
+  position: relative;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--gh-border);
+  border-radius: 6px;
+  background: var(--gh-canvas);
+}
+
+.gh-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  color: var(--gh-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* "genomeOS" as GitHub writes a repository's name: the brand span inherits the mock's type. */
+.gh .brand-name {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.gh-card__title {
+  margin: 0;
+  color: var(--gh-text);
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+
+.gh-card__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+
+.gh-label {
+  padding: 0 7px;
+  border: 1px solid;
+  border-radius: 2em;
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.gh-hover {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid #58a6ff;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- the example card ---------- */
+
+/* The copies in Backlog, In progress and In review only hold its place. */
+.gh-card--example[data-example='slot'] {
+  visibility: hidden;
+}
+
+.ex-icon,
+.ex-pr-icon {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.ex-merged,
+.ex-pr-merged {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--gh-canvas);
+}
+
+.ex-av,
+.ex-rev {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.wb .gh-av {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.ex-rev .gh-av + .gh-av {
+  margin-left: -4px;
+}
+
+/* On the narrowest desktop columns the reviewers' helmets give way to the status word (the
+   experts are on the floor below anyway). */
+.gh-card--example {
+  container-type: inline-size;
+}
+
+@container (width < 190px) {
+  .ex-rev {
+    display: none;
+  }
+}
+
+/* At 64rem (iPad landscape) the status word needs the dot's room; the word keeps its colour. */
+@container (width < 150px) {
+  .st i {
+    display: none;
+  }
+}
+
+.ex-pr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  overflow: hidden;
+  border-top: 1px solid var(--gh-border);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ex-st {
+  display: inline-grid;
+}
+
+.st {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.st[hidden] {
+  display: none;
+}
+
+.st i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+/* Status words always beside their colour: 7.5:1, 7.45:1 and 5.64:1 on the canvas (spec §8). */
+.st-req {
+  color: #d29922;
+}
+
+.st-ok {
+  color: #3fb950;
+}
+
+.st-merged {
+  color: #a371f7;
+}
+
+/* ---------- the floor: the storyboard, or the live scene ---------- */
+
+/* The floor's room under the cards. It paints nothing, so when the example card's pull-request
+   row opens above it in Merge nothing visible moves. */
+.gh-stage {
+  flex: 1;
+  min-height: var(--gh-floor-h);
+}
+
+/* The floor line in each column (the floor's figures stand on it), kept at the column's foot. */
+.gh-col::after {
+  position: absolute;
+  right: 10px;
+  bottom: 21px;
+  left: 10px;
+  height: 1px;
+  background: var(--gh-border);
+  content: '';
+}
+
+.gh-floor {
+  /* The floor is composed for 248 px columns (board-layout.ts COL_REF). Narrower desktop columns
+     draw it smaller, k = column / 248 = (track − 2 × 12 − 4 × 8) / (5 × 248): board.ts computes
+     the same for the live floor; the storyboard reads it here. */
+  --wb-k: min(1, tan(atan2(100cqw - 56px, 1240px)));
+
+  position: absolute;
+  right: 0;
+  bottom: 12px;
+  left: 0;
+  z-index: 3;
+  height: var(--gh-floor-h);
+  pointer-events: none;
+}
+
+.floor-svg {
+  display: block;
+  overflow: visible;
+}
+
+.floor-svg--sb .sb-k {
+  scale: var(--wb-k);
+}
+
+/* Speech bubbles keep their 14 px words. */
+.floor-svg--sb .sb-unk {
+  scale: calc(1 / var(--wb-k));
+}
+
+.floor-svg--sb .sb-arcs {
+  scale: 1 var(--wb-k);
+}
+
+.floor-svg text {
+  font-family: var(--font-body);
+}
+
+/* The storyboard's hello: one line where Discussion has the room, two lines on the narrowest
+   desktops (board-layout.ts storyboardOneLine; content-contribute-board.test.ts keeps them equal).
+   The phone and tablet track's 300 px columns always have the room.
+   The form not shown is also visibility: hidden, so audits that ask checkVisibility() (which
+   passes SVG under display: none) skip its words. */
+.floor-svg--sb .sb-two {
+  display: none;
+  visibility: hidden;
+}
+
+@media (min-width: 64rem) {
+  @container wb-track (width < 1086px) {
+    .floor-svg--sb .sb-one {
+      display: none;
+      visibility: hidden;
+    }
+
+    .floor-svg--sb .sb-two {
+      display: inline;
+      visibility: visible;
+    }
+  }
+}
+
+/* ---------- the figcaption ---------- */
+
+.wb > .wb-caption {
+  min-height: 2.9rem;
+}
+
+/* ---------- the column buttons (phones and tablets) ---------- */
+
+.wb-colnav {
+  display: none;
+}
+
+/* ---------- phones and tablets: a track of 300 px columns ---------- */
+
+@media (max-width: 63.99rem) {
+  .wb > .wb-head {
+    padding-left: 0.85rem;
+  }
+
+  /* Without the scene (no script, reduced motion) the track scrolls by hand, column by column. */
+  .gh-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-color: var(--gh-border) transparent;
+  }
+
+  .wb.is-live .gh-scroll {
+    overflow: hidden;
+  }
+
+  .gh-track {
+    width: max-content;
+  }
+
+  /* 300 px columns; on the narrowest phones a column and its pad fit the window. */
+  .gh-cols {
+    grid-template-columns: repeat(5, min(300px, 100cqw - 24px));
+  }
+
+  .gh-floor {
+    --wb-k: 1;
+  }
+
+  .gh-col {
+    scroll-snap-align: center;
+  }
+
+  .gh-pan {
+    transition: transform 700ms var(--ease-camera);
+  }
+
+  /* The five column buttons fill their rows (design critique 3: wrapped 3 + 2 to the left, the
+     second row looked unfinished): on a phone, three a row and then two, each row edge to edge (a
+     six-track grid, spans of 2 and 3); from 45rem, five equal columns in one row. */
+  .wb-colnav:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--gh-border);
+    background: var(--gh-canvas);
+  }
+
+  .wb-colnav button {
+    grid-column: span 2;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--gh-border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-muted);
+    font: 600 0.8rem/1.15 var(--font-body);
+    text-wrap: balance;
+    cursor: pointer;
+  }
+
+  .wb-colnav button:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+
+  /* The narrowest phones (320 px): a little more room a button and a step smaller type (13.5 px,
+     above the mock's 13 px floor), so "Discussion" keeps padding inside its border instead of
+     filling it edge to edge, and "In progress" stays on one line (design critique 4). */
+  @media (max-width: 21.99rem) {
+    .wb-colnav:not([hidden]) {
+      gap: 4px;
+      padding-inline: 8px;
+    }
+
+    .wb-colnav button {
+      padding-inline: 0.3rem;
+      font-size: 0.75rem;
+    }
+  }
+
+  @media (min-width: 45rem) {
+    .wb-colnav:not([hidden]) {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .wb-colnav button,
+    .wb-colnav button:nth-child(n + 4) {
+      grid-column: auto;
+    }
+  }
+
+  .wb-colnav button:hover {
+    color: var(--color-starlight);
+  }
+
+  .wb-colnav button[aria-pressed='true'] {
+    border-color: var(--color-ion);
+    color: var(--color-starlight);
+  }
+
+  .wb-colnav button:focus-visible {
+    outline: 2px solid var(--color-ion);
+    outline-offset: 2px;
+  }
+}
+
+/* ---------- milestones ---------- */
+
+.wb-milestones {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--grid-gap);
+  row-gap: 1.1rem;
+  align-items: start;
+  margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+.wb-milestones__lead {
+  grid-column: 1 / span 3;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--type-legend);
+  line-height: 1.45;
+}
+
+.wb-milestones__lead strong {
+  color: var(--color-starlight);
+  font-weight: 620;
+}
+
+.wb-milestones__rail {
+  position: relative;
+  display: grid;
+  grid-column: 4 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wb-milestones__rail::before {
+  position: absolute;
+  top: 0.42rem;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--color-line-strong);
+  content: '';
+}
+
+.wb-milestones__rail li {
+  position: relative;
+  padding: 1.35rem 0.75rem 0 0;
+  color: var(--color-text-soft);
+  font-size: 0.95rem;
+  font-weight: 560;
+  line-height: 1.35;
+}
+
+.wb-milestones__rail li::before {
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  border: 1.5px solid var(--color-ion);
+  background: var(--color-orbit);
+  content: '';
+  transform: rotate(45deg);
+}
+
+@media (max-width: 52rem) {
+  .wb-milestones__lead,
+  .wb-milestones__rail {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 40rem) {
+  .wb-milestones__rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 1.1rem;
+  }
+
+  .wb-milestones__rail::before {
+    display: none;
+  }
+
+  .wb-milestones__rail li {
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--color-line-strong);
+  }
+
+  .wb-milestones__rail li::before {
+    top: -0.38rem;
+  }
+}
+
+/* ---------- reduced motion, print, forced colours ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-pan {
+    transition: none;
+  }
+}
+
+@media print {
+  .wb-colnav {
+    display: none !important;
+  }
+
+  .gh-scroll {
+    overflow: visible;
+  }
+}
+
+@media (forced-colors: active) {
+  .gh-col,
+  .gh-card,
+  .gh-label,
+  .gh-count,
+  .wb-colnav button {
+    border-color: CanvasText;
+  }
+
+  .gh-col::after {
+    background: CanvasText;
+  }
+}

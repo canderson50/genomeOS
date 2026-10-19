@@ -85,6 +85,26 @@ committed in this PR. CI fails if it is stale.
      measured observations as one layer, always show where there is no data rather than leaving it
      blank, and check the colour ramp reads low-to-high without the legend. -->
 
+## For website figure changes only
+
+<!-- Any figure on the marketing site or in the docs that draws data, a surface or a mechanism
+     (site redesign spec §6.2; round 2 spec §6.2; #454). Check each box per figure, or delete this
+     section. -->
+
+- [ ] Measured and modeled use different marks and separate legend entries.
+- [ ] No value is drawn where support is `unknown`.
+- [ ] A 95% range is visible or one interaction away, and in the table.
+- [ ] Observations are counts (AC of AN); zero is an interval.
+- [ ] Display resolution ≤ artifact resolution.
+- [ ] Status words match the Projects status rail; modeled or sample figures carry a plain note and a
+      link to the Atlas (no scare tags); future work is violet dashed.
+- [ ] Numbers come from pinned data (provenance in the footnote) or are tagged "Example".
+- [ ] Counts about a place are stated in people tested (AN/2 where the locus is autosomal); no
+      carrier count is derived from AC without genotype counts.
+- [ ] People drawn in a data figure are micro astronauts; ancestry is never drawn as skin colour.
+- [ ] No status colour or gold inside a data ramp.
+- [ ] The reduced-motion state is the most informative state.
+
 ## Scope
 
 - [ ] I did not widen scope silently. Real problems found outside this task were filed as issues,

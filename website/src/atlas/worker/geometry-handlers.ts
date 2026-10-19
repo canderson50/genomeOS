@@ -17,9 +17,9 @@ import {
 import { buildEdgeChunk, edgeCapacity } from '../geometry/edge-buffers';
 import {
   naturalEarthHeights,
-  parseNaturalEarth,
   type NaturalEarthBuffers,
 } from '../geometry/natural-earth';
+import { decodeNaturalEarth } from '../geometry/natural-earth-codec';
 import { buildSurfaceChunk, type MeshInput } from '../geometry/surface-buffers';
 import { buildSupportChunk } from '../geometry/support-buffers';
 import { buildGridTopology, type GridTopology } from '../geometry/topology';
@@ -76,15 +76,18 @@ function chunkTransferables(message: ChunkMessage): ArrayBuffer[] {
     surface.colors,
     surface.heights,
     surface.values,
+    surface.cellCentres,
     surface.indices,
     support.unknown?.positions,
     support.unknown?.normals,
     support.unknown?.st,
+    support.unknown?.cellCentres,
     support.unknown?.indices,
     ...support.priorDominated.flatMap(({ buffers }) => [
       buffers.positions,
       buffers.normals,
       buffers.st,
+      buffers.cellCentres,
       buffers.indices,
     ]),
     anchors?.heights,
@@ -328,10 +331,7 @@ export function createGeometryWorker(
       guarded(
         request.id,
         async () => {
-          const json = JSON.parse(
-            new TextDecoder('utf-8', { fatal: true }).decode(request.json),
-          );
-          const buffers = parseNaturalEarth(json);
+          const buffers = decodeNaturalEarth(request.bytes);
           naturalEarth = {
             labels: buffers.labels,
             lonLat: buffers.lonLat.slice(),
