@@ -1,6 +1,10 @@
 /** Shared Cesium scene contracts for Atlas design §11. */
 
-import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
+import type { Primitive, PrimitiveCollection } from 'cesium';
+
+import type { ObservationArtifact } from '../contracts';
+import type { LoadTask } from '../load-order';
+import type { SurfaceArtifact as SurfaceColumns } from '../surface-columns';
 import type {
   ObservationColorVariable,
   ObservationShape,
@@ -17,16 +21,52 @@ import type {
   SurfaceGeometry,
   TerrainId,
 } from '../url-state';
+import type { AtlasWorkerClient } from '../worker/client';
 import type { ContextWarning } from './context-controller';
 import type { ObservationPick } from './observation-layer';
-import type { SurfacePick } from './surface-layer';
 
+/** A resolved surface pick: the cell row of the artifact whose chunk was picked. */
+export type SurfacePick = {
+  kind: 'surface';
+  artifactKey: string;
+  row: number;
+  h3Index: string;
+};
 export type AtlasPick = SurfacePick | ObservationPick;
+export type AtlasPickId = SurfaceChunkPick | ObservationPick;
 export interface AtlasHover {
   pick: AtlasPick;
   screenPosition: { x: number; y: number };
 }
+
+export type SurfaceChunkPick = {
+  kind: 'surface-chunk';
+  artifactKey: string;
+  chunk: number;
+};
+
+export interface ScientificPrimitiveGroup {
+  collection: PrimitiveCollection;
+  primitives: Primitive[];
+  isReady(): boolean;
+  readyCount(): number;
+  totalCount(): number;
+  setOpacity(opacity: number): void;
+  setSurfaceOpacity(opacity: number): void;
+  setCellEdges(visible: boolean): Promise<void>;
+  setElevationFactor(factor: number, force?: boolean): void;
+  setSceneMode(mode: ExplorerSceneMode): Promise<void>;
+  setVisibility(surface: boolean, support: boolean): void;
+}
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
+export type AtlasMark =
+  | 'observations-visible'
+  | 'surface-first-chunk'
+  | 'surface-visible'
+  | 'ready'
+  | 'values-ready'
+  | 'edges-ready'
+  | 'context-ready';
 
 export interface SceneProgress {
   detail: string;
@@ -34,6 +74,41 @@ export interface SceneProgress {
 }
 
 export type SceneProgressListener = (progress: SceneProgress) => void;
+
+export interface ArtifactLoad {
+  artifactKey: string;
+  artifactId: string;
+  observations: Promise<ObservationArtifact | null>;
+  surface: Promise<SurfaceColumns>;
+  /** Degrees; the worker orders chunks nearest this point first. Defaults to the camera. */
+  lookAt?: { lat: number; lon: number };
+}
+
+export interface DisplayedLayer {
+  artifactKey: string;
+  metric: Metric;
+  palette: PaletteId;
+  geometry: SurfaceGeometry;
+}
+
+export interface ArtifactSceneApi {
+  setArtifact(
+    load: ArtifactLoad,
+    progress?: SceneProgressListener,
+  ): Promise<void>;
+  onCommit(listener: (artifactKey: string) => void): () => void;
+  onMark(listener: (mark: AtlasMark) => void): () => void;
+  displayedLayer(): DisplayedLayer | null;
+  markValuesReady(artifactKey: string): void;
+  removeSurface(artifactKey: string): void;
+  /**
+   * Runs a detail-tier load as step 2 of the post-reveal load order (spec 2026-10-07 §B.6.9): once
+   * the Natural Earth borders have settled, and at once when they already have. The task settles
+   * when its request does and reports body progress, so a slow transfer is not a stall. Returns a
+   * cancel that drops the load if it has not started.
+   */
+  queueDetail(task: LoadTask): () => void;
+}
 
 export interface SceneCapabilities {
   basemaps: Record<BasemapId, boolean>;
@@ -57,14 +132,16 @@ export interface AtlasSceneOptions {
   contextImageryUrl?: string;
   naturalEarthUrl: string;
   reducedMotion?: boolean;
+  /** The provider's worker: it already holds each artifact's decoded grid and render tier. */
+  worker: AtlasWorkerClient;
+  /** `.atlas-explorer`, which receives the readiness attributes. */
+  markTarget?: { setAttribute(name: string, value: string): void } | null;
+  frameBudgetMs?: number;
+  /** The post-reveal load order's stall window; defaults to the provider's (§B.6.2, §B.6.9). */
+  loadStallMs?: number;
 }
 
-export interface AtlasSceneController {
-  setArtifact(
-    surface: SurfaceArtifact,
-    observations: ObservationArtifact | null,
-    progress?: SceneProgressListener,
-  ): Promise<void>;
+export interface AtlasSceneController extends ArtifactSceneApi {
   setMetric(metric: Metric, progress?: SceneProgressListener): Promise<void>;
   setSurfaceStyle(
     palette: PaletteId,
@@ -94,6 +171,13 @@ export interface AtlasSceneController {
   setElevation(enabled: boolean, exaggeration: number): Promise<void>;
   setSceneMode(mode: ExplorerSceneMode, reducedMotion: boolean): Promise<void>;
   setCamera(camera: CameraState, animated: boolean): void;
+  /**
+   * CSS px of the canvas, measured from its left edge, that the persistent controls panel covers
+   * (0 when it is hidden or a phone's bottom sheet). The globe is drawn centred in the rest by
+   * shifting the projection centre; the camera does not move (fast-load design §A.1.13, amended
+   * 2026-10-13; #452).
+   */
+  setLeftObstruction(width: number): void;
   setSelection(pick: AtlasPick | null): void;
   home(animated: boolean): void;
   zoom(direction: 'in' | 'out'): void;
@@ -104,5 +188,12 @@ export interface AtlasSceneController {
   onWarning(
     listener: (warnings: readonly ContextWarning[]) => void,
   ): () => void;
+  /**
+   * A frame threw, inside Scene.render or in any listener, tick or resize the Atlas render loop
+   * runs, and rendering stopped for good (Cesium globe design §12), so listeners offer a retry.
+   * The error is reported once, a late listener still hears it, and none is reported after
+   * destroy.
+   */
+  onRenderError(listener: (error: unknown) => void): () => void;
   destroy(): void;
 }

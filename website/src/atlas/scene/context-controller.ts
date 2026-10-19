@@ -15,16 +15,23 @@ import {
   buildModuleUrl,
   createWorldImageryAsync,
   createWorldTerrainAsync,
-  type Viewer,
+  type CesiumWidget,
 } from 'cesium';
 
-import { BASEMAP_OPTIONS, TERRAIN_OPTIONS } from '../earth-style-catalog';
+import {
+  availableBasemaps,
+  availableTerrains,
+  ION_UNAVAILABLE,
+} from '../earth-style-catalog';
 import type { BasemapId, TerrainId } from '../url-state';
 
-export interface SceneCapability {
-  available: boolean;
-  reason?: string;
-}
+// Cesium-free helpers moved for the lazy scene chunk (fast-load design §B.6.11); kept for callers.
+export {
+  availableBasemaps,
+  availableTerrains,
+  ionCapability,
+  type SceneCapability,
+} from '../earth-style-catalog';
 
 export interface ContextWarning {
   id: 'basemap' | 'terrain';
@@ -38,34 +45,6 @@ export interface ContextWarningClear {
 
 export type ContextWarningUpdate = ContextWarning | ContextWarningClear;
 export type ContextWarningListener = (warning: ContextWarningUpdate) => void;
-
-const ION_UNAVAILABLE = 'Cesium ion access is unavailable in this build.';
-
-export function ionCapability(token: string): SceneCapability {
-  return token.trim()
-    ? { available: true }
-    : { available: false, reason: ION_UNAVAILABLE };
-}
-
-export function availableBasemaps(token: string): Record<BasemapId, boolean> {
-  const ionAvailable = ionCapability(token).available;
-  return Object.fromEntries(
-    BASEMAP_OPTIONS.map(({ id, requiresIon }) => [
-      id,
-      !requiresIon || ionAvailable,
-    ]),
-  ) as Record<BasemapId, boolean>;
-}
-
-export function availableTerrains(token: string): Record<TerrainId, boolean> {
-  const ionAvailable = ionCapability(token).available;
-  return Object.fromEntries(
-    TERRAIN_OPTIONS.map(({ id, requiresIon }) => [
-      id,
-      !requiresIon || ionAvailable,
-    ]),
-  ) as Record<TerrainId, boolean>;
-}
 
 export interface BasemapAppearanceTarget {
   alpha: number;
@@ -193,23 +172,29 @@ async function galleryMapLayer(
 }
 
 export class ContextController {
-  readonly #viewer: Viewer;
+  readonly #widget: CesiumWidget;
   readonly #token: string;
   readonly #publicImageryUrl: string;
   readonly #onWarning: ContextWarningListener;
   #activeLayer: ImageryLayer | null = null;
+  // The requested basemap and its load; a repeat request for the same id reuses it.
+  #basemapRequest: { basemap: BasemapId; result: Promise<boolean> } | null =
+    null;
+  // The request whose layer is on the globe; a failed request falls back to it.
+  #basemapApplied: { basemap: BasemapId; result: Promise<boolean> } | null =
+    null;
   #basemapBrightness = 0.5;
   #basemapOpacity = 1;
   #basemapSequence = 0;
   #terrainSequence = 0;
 
   constructor(
-    viewer: Viewer,
+    widget: CesiumWidget,
     token: string,
     publicImageryUrl: string,
     onWarning: ContextWarningListener,
   ) {
-    this.#viewer = viewer;
+    this.#widget = widget;
     this.#token = token.trim();
     this.#publicImageryUrl = publicImageryUrl;
     this.#onWarning = onWarning;
@@ -226,7 +211,22 @@ export class ContextController {
     };
   }
 
-  async setBasemap(basemap: BasemapId): Promise<boolean> {
+  setBasemap(basemap: BasemapId): Promise<boolean> {
+    if (this.#basemapRequest?.basemap === basemap) {
+      return this.#basemapRequest.result;
+    }
+    const result = this.#loadBasemap(basemap);
+    const request = { basemap, result };
+    this.#basemapRequest = request;
+    void result.then((applied) => {
+      if (applied) this.#basemapApplied = request;
+      else if (this.#basemapRequest === request)
+        this.#basemapRequest = this.#basemapApplied;
+    });
+    return result;
+  }
+
+  async #loadBasemap(basemap: BasemapId): Promise<boolean> {
     const sequence = ++this.#basemapSequence;
     if (!availableBasemaps(this.#token)[basemap]) {
       this.#onWarning({
@@ -244,9 +244,9 @@ export class ContextController {
         this.#basemapBrightness,
       );
       const previous = this.#activeLayer;
-      this.#viewer.imageryLayers.add(incoming, 0);
+      this.#widget.imageryLayers.add(incoming, 0);
       this.#activeLayer = incoming;
-      if (previous) this.#viewer.imageryLayers.remove(previous, true);
+      if (previous) this.#widget.imageryLayers.remove(previous, true);
       incoming.errorEvent.addEventListener(() => {
         if (this.#activeLayer !== incoming) return;
         this.#onWarning({
@@ -255,7 +255,7 @@ export class ContextController {
         });
       });
       this.#onWarning({ id: 'basemap', message: null });
-      this.#viewer.scene.requestRender();
+      this.#widget.scene.requestRender();
       return true;
     } catch {
       if (sequence === this.#basemapSequence) {
@@ -286,9 +286,9 @@ export class ContextController {
               requestWaterMask: true,
             });
       if (sequence !== this.#terrainSequence) return false;
-      this.#viewer.terrainProvider = provider;
+      this.#widget.terrainProvider = provider;
       this.#onWarning({ id: 'terrain', message: null });
-      this.#viewer.scene.requestRender();
+      this.#widget.scene.requestRender();
       return true;
     } catch {
       if (sequence === this.#terrainSequence) {
@@ -310,6 +310,6 @@ export class ContextController {
     this.#basemapBrightness = brightness;
     if (this.#activeLayer)
       applyBasemapAppearance(this.#activeLayer, opacity, brightness);
-    this.#viewer.scene.requestRender();
+    this.#widget.scene.requestRender();
   }
 }

@@ -1,6 +1,6 @@
 # Keep the project board in sync with issue state.
 #
-# Two things GitHub's built-in project workflows cannot do for a user-owned project, both of
+# Two things GitHub's built-in project workflows cannot do, both of
 # which are UI-only to configure and therefore easy to lose:
 #   1. "Item closed" sets a single Status value, so it cannot distinguish an issue closed as
 #      completed from one closed as not planned.
@@ -13,15 +13,21 @@ on:
     types: [opened, closed, reopened]
 
 env:
-  GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
   PROJECT_ID: ${{ vars.PROJECT_ID }}
   STATUS_FIELD_ID: ${{ vars.STATUS_FIELD_ID }}
   ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
 
+# PROJECT_TOKEN is a secret of the `project-board` environment, which only `main` may deploy to,
+# so a workflow pushed to any other branch cannot read it. Issue events always run on the default
+# branch. Each job names the environment and reads the token itself; a workflow-level `env` would
+# not see an environment secret.
 jobs:
   add-to-project:
     if: github.event.action == 'opened'
     runs-on: ubuntu-latest
+    environment: project-board
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
       - name: Add the new issue to the board as Backlog
         env:
@@ -51,6 +57,9 @@ jobs:
   set-status:
     if: github.event.action != 'opened'
     runs-on: ubuntu-latest
+    environment: project-board
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
       - name: Set Status from the issue's state reason
         env:

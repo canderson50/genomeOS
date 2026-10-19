@@ -1,6 +1,15 @@
-/** Strict static-atlas browser contracts for Atlas design §11. */
+/**
+ * Strict static-atlas browser contracts for Atlas design §11. The catalog is read through
+ * `parseAtlasCatalog`, which applies the format-version rules of `format-version.ts`.
+ */
 
 import { z } from 'zod';
+
+import {
+  catalogReadMode,
+  FORMAT_VERSION_PATTERN,
+  SUPPORTED_FORMAT,
+} from './format-version';
 
 const finiteNumber = z
   .number()
@@ -8,6 +17,38 @@ const finiteNumber = z
 const probability = finiteNumber.min(0).max(1);
 const nonEmpty = z.string().trim().min(1);
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+const positiveInt = z.int().positive();
+
+/**
+ * A relative data key (fast-load spec §B.4): resolved against a data base at fetch time, so it
+ * may carry no scheme, no leading slash and no `..` segment. Written by `encode_atlas_web.py`.
+ */
+export const dataKeySchema = z
+  .string()
+  .regex(
+    /^[a-z0-9][a-z0-9._/-]*$/,
+    'data key must be a lowercase relative path',
+  )
+  .refine(
+    (key) => !key.split('/').includes('..'),
+    'data key must not contain a .. segment',
+  );
+
+/** One immutable, content-addressed GOSA object; `bytes` is its decoded size. */
+export const webObjectSchema = z.strictObject({
+  url: dataKeySchema,
+  sha256,
+  bytes: positiveInt,
+});
+
+/** The shared H3 grid object, keyed in `grids` by the sha256 of its decoded u64 column. */
+export const gridEntrySchema = z.strictObject({
+  url: dataKeySchema,
+  sha256,
+  bytes: positiveInt,
+  resolution: z.int().min(0).max(15),
+  n_cells: positiveInt,
+});
 
 export const supportSchema = z.enum([
   'observed',
@@ -71,16 +112,22 @@ export const artifactIdentitySchema = z
   .strictObject(artifactIdentityFields)
   .superRefine(requireVersionedTargetGrid);
 
-const supportCountsSchema = z.partialRecord(
-  supportSchema,
-  z.int().nonnegative(),
-);
+// An unknown state is a custom issue, not an unrecognized key, so `parseAtlasCatalog` can never
+// ignore it under a newer MINOR: a new support state is a MAJOR change (docs/web-data-format.md).
+const supportCountsSchema = z
+  .record(z.string(), z.unknown())
+  .refine(
+    (counts) =>
+      Object.keys(counts).every((key) => supportSchema.safeParse(key).success),
+    'support_counts keys must be support states',
+  )
+  .pipe(z.partialRecord(supportSchema, z.int().nonnegative()));
 
 const downloadRefSchema = z.strictObject({
   label: nonEmpty,
   media_type: nonEmpty,
   sha256,
-  url: nonEmpty,
+  url: dataKeySchema,
 });
 
 // NON-COMMERCIAL: the commercial-use marking published with every external resource. genomeOS may
@@ -106,7 +153,7 @@ const commercialUseSchema = z.strictObject({
 const externalResourceSchema = z.discriminatedUnion('source', [
   z.strictObject({
     cache_sha256: sha256,
-    cache_url: nonEmpty,
+    cache_url: dataKeySchema,
     commercial_use: commercialUseSchema,
     dataset: nonEmpty,
     normalized_variant_id: z
@@ -116,7 +163,7 @@ const externalResourceSchema = z.discriminatedUnion('source', [
   }),
   z.strictObject({
     cache_sha256: sha256,
-    cache_url: nonEmpty,
+    cache_url: dataKeySchema,
     commercial_use: commercialUseSchema,
     // `method` carries the lookup-versus-inference split. `source` names the provider and stays
     // 'alphagenome' for both, so a future model-inference entry is also legitimately AlphaGenome
@@ -130,7 +177,7 @@ const externalResourceSchema = z.discriminatedUnion('source', [
   }),
   z.strictObject({
     cache_sha256: sha256,
-    cache_url: nonEmpty,
+    cache_url: dataKeySchema,
     commercial_use: commercialUseSchema,
     normalized_variant_id: z
       .string()
@@ -177,7 +224,12 @@ const artifactRefBaseFields = {
   n_observations: z.int().nonnegative(),
   support_counts: supportCountsSchema,
   surface_sha256: sha256,
-  surface_url: nonEmpty,
+  surface_url: dataKeySchema,
+  web: z.strictObject({
+    grid_sha256: sha256,
+    render: webObjectSchema,
+    detail: webObjectSchema,
+  }),
 };
 
 export const artifactRefSchema = z
@@ -186,13 +238,15 @@ export const artifactRefSchema = z
       ...artifactIdentityFields,
       ...artifactRefBaseFields,
       observations_available: z.literal(true),
+      observations_bytes: positiveInt,
       observations_sha256: sha256,
-      observations_url: nonEmpty,
+      observations_url: dataKeySchema,
     }),
     z.strictObject({
       ...artifactIdentityFields,
       ...artifactRefBaseFields,
       observations_available: z.literal(false),
+      observations_bytes: z.null(),
       observations_sha256: z.null(),
       observations_url: z.null(),
     }),
@@ -228,8 +282,17 @@ export const contextSourceSchema = z.strictObject({
   license: nonEmpty,
   revision: nonEmpty,
   source_url: z.url(),
-  url: nonEmpty,
+  url: dataKeySchema,
 });
+
+/** "MAJOR.MINOR" with this client's MAJOR (docs/web-data-format.md). */
+const formatVersionSchema = z
+  .string()
+  .regex(FORMAT_VERSION_PATTERN, 'format_version must be "MAJOR.MINOR"')
+  .refine(
+    (value) => Number(value.split('.')[0]) === SUPPORTED_FORMAT.major,
+    `format_version MAJOR must be ${SUPPORTED_FORMAT.major}`,
+  );
 
 export const atlasCatalogSchema = z
   .strictObject({
@@ -239,12 +302,20 @@ export const atlasCatalogSchema = z
     context_sources: z.array(contextSourceSchema),
     created_at: nonEmpty,
     discovery_groups: z.array(discoveryGroupSchema).min(1),
+    format_version: formatVersionSchema,
+    grids: z.record(sha256, gridEntrySchema),
     hf_dataset: nonEmpty,
     hf_revision: nonEmpty,
     registry_versions: z.array(nonEmpty).min(1),
-    schema_version: z.literal(1),
   })
-  .superRefine(({ artifacts, discovery_groups }, context) => {
+  .superRefine(({ artifacts, discovery_groups, grids }, context) => {
+    if (Object.keys(grids).length !== 1) {
+      context.addIssue({
+        code: 'custom',
+        message: 'catalog must declare exactly one grid in v1',
+        path: ['grids'],
+      });
+    }
     const groupIds = new Set(discovery_groups.map(({ id }) => id));
     if (groupIds.size !== discovery_groups.length) {
       context.addIssue({
@@ -261,8 +332,56 @@ export const atlasCatalogSchema = z
           path: ['artifacts', index, 'discovery', 'group_id'],
         });
       }
+      const grid = Object.hasOwn(grids, artifact.web.grid_sha256)
+        ? grids[artifact.web.grid_sha256]
+        : undefined;
+      if (!grid || grid.resolution !== artifact.resolution) {
+        context.addIssue({
+          code: 'custom',
+          message: 'artifact must name a declared grid of its resolution',
+          path: ['artifacts', index, 'web', 'grid_sha256'],
+        });
+      }
     }
   });
+
+/**
+ * Read a raw catalog under the format-version rules (docs/web-data-format.md). No version, a
+ * malformed one or another MAJOR throws `AtlasFormatVersionError` before any field is read. This
+ * client's MINOR, or an older one, must pass the strict schema, so an unknown key there is an error.
+ * A newer MINOR must pass it once the keys this client does not know are dropped; every known field
+ * is still validated. `raw` is not mutated.
+ */
+export function parseAtlasCatalog(raw: unknown): AtlasCatalog {
+  return atlasCatalogSchema.parse(
+    catalogReadMode(raw) === 'strict' ? raw : withoutUnknownKeys(raw),
+  );
+}
+
+/** A copy of `raw` without the keys the strict schema reports as unrecognized, wherever they are. */
+function withoutUnknownKeys(raw: unknown): unknown {
+  // The catalog arrived as JSON text, so a JSON round trip is an exact deep copy.
+  const value: unknown = JSON.parse(JSON.stringify(raw));
+  for (let removed = true; removed;) {
+    removed = false;
+    const result = atlasCatalogSchema.safeParse(value);
+    if (result.success) break;
+    for (const issue of result.error.issues) {
+      if (issue.code !== 'unrecognized_keys') continue;
+      const owner = issue.path.reduce<unknown>(
+        (node, key) => (node as Record<PropertyKey, unknown>)[key],
+        value,
+      ) as Record<string, unknown>;
+      for (const key of issue.keys) {
+        if (Object.hasOwn(owner, key)) {
+          delete owner[key];
+          removed = true;
+        }
+      }
+    }
+  }
+  return value;
+}
 
 export const surfaceCellSchema = z
   .strictObject({
@@ -489,3 +608,5 @@ export type ObservationArtifact = z.infer<typeof observationArtifactSchema>;
 export type CommercialUse = z.infer<typeof commercialUseSchema>;
 export type ExternalResource = z.infer<typeof externalResourceSchema>;
 export type ExternalInfo = z.infer<typeof externalInfoSchema>;
+export type WebObject = z.infer<typeof webObjectSchema>;
+export type GridEntry = z.infer<typeof gridEntrySchema>;

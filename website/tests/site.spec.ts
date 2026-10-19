@@ -1,13 +1,59 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { cellToLatLng } from 'h3-js';
+import { cellToLatLng, latLngToCell } from 'h3-js';
 
-import { installAtlasBrowserFixture } from './atlas-browser-fixture';
+import {
+  contextSourceKey,
+  NATURAL_EARTH_BORDERS,
+} from '../src/atlas/context-sources';
+import type { AtlasCatalog } from '../src/atlas/contracts';
+import { StaticAtlasDataProvider } from '../src/atlas/static-provider';
+import { dataHref } from '../src/lib/data-url';
+import {
+  artifactTierKey,
+  corruptArtifactTier,
+  delayArtifactTier,
+  displayedArtifactIds,
+  failArtifactTier,
+  readInlineCatalog,
+  urlMatchesKey,
+} from './atlas-browser-fixture';
+import {
+  besideGlobeCentre,
+  canvasCentre,
+  GLOBE_DISC_QUERY,
+  globeViewCentre,
+  heldReadoutsOf,
+  measureGlobeDisc,
+  waitForSettledGlobe,
+  type Point,
+} from './atlas-globe-helpers';
+import {
+  expandExplorerSheet,
+  INSPECTOR_CAMERA,
+  legendRow,
+  markLegendLoading,
+  recordedLegendLoading,
+  recordLegendLoading,
+  waitForRevealWave,
+  type LegendRow,
+} from './atlas-mobile-helpers';
+import {
+  cameraAtRest,
+  cellCamera,
+  EARLY_PROGRESS,
+  globeView,
+  holdRevealWave,
+  holdRevealWaveFromStart,
+  readWave,
+  renderedFrames,
+  SURFACE_ONLY,
+  waveFrame,
+} from './atlas-reveal-wave-helpers';
+import { useSiteFixtures } from './helpers/marketing';
+import { topLevelRoutes } from './site-routes';
 
-test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
-test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: 'ignoreErrors' });
-});
+useSiteFixtures();
 
 async function chooseAtlasMap(page: Page, id: string): Promise<void> {
   await page
@@ -15,15 +61,6 @@ async function chooseAtlasMap(page: Page, id: string): Promise<void> {
     .click();
   await page.locator(`[role="option"][data-map-id="${id}"]`).click();
 }
-
-const topLevelRoutes = [
-  '/',
-  '/project/',
-  '/working-groups/',
-  '/contribute/',
-  '/app/',
-  '/docs/',
-];
 
 const brandAuditRoutes = [
   ...topLevelRoutes,
@@ -41,6 +78,10 @@ for (const route of topLevelRoutes) {
     page,
   }) => {
     await page.goto(route);
+    if (route === '/app/')
+      await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+        timeout: 45_000,
+      });
     await expect(page.locator('h1')).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })
@@ -53,49 +94,614 @@ for (const route of topLevelRoutes) {
   });
 }
 
-test('primary navigation reaches working groups and exposes GitHub access', async ({
+test('primary navigation reaches Contribute and exposes GitHub access', async ({
   page,
   isMobile,
 }) => {
   await page.goto('/');
   const header = page.locator('.site-header');
-  const launchAtlas = header.getByRole('link', { name: 'Launch Atlas' });
-  await expect(launchAtlas).toHaveAttribute('href', '/app/');
+  const atlas = header.getByRole('link', {
+    name: 'genomeOS Atlas',
+    exact: true,
+  });
+  await expect(atlas).toHaveAttribute('href', '/app/');
+  await expect(atlas).toHaveAccessibleDescription(
+    'Explore the interactive app',
+  );
+  // The caption is beside the link, so the link's own text is its name: what
+  // a crawler or a plain-text copy reads.
+  expect(
+    await atlas.evaluate((link) =>
+      link.textContent!.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toBe('genomeOS Atlas');
   await expect(header.getByRole('link', { name: 'Preview' })).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'View genomeOS on GitHub' }).first(),
-  ).toHaveAttribute('href', 'https://github.com/bschilder/genomeOS');
+  ).toHaveAttribute('href', 'https://github.com/genomeOS/genomeOS');
 
   if (isMobile) {
     await page.getByText('Menu', { exact: true }).click();
-    await expect(launchAtlas).toBeVisible();
+    await expect(atlas).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Mobile navigation' })
-      .getByRole('link', { name: 'Working groups' })
+      .getByRole('link', { name: 'Contribute' })
       .click();
   } else {
-    const headerLinks = await header.locator('a').allInnerTexts();
-    expect(headerLinks.indexOf('Technical docs')).toBeLessThan(
-      headerLinks.indexOf('Launch Atlas'),
-    );
-    expect(headerLinks.indexOf('Launch Atlas')).toBeLessThan(
-      headerLinks.indexOf('GitHub'),
-    );
-    await launchAtlas.hover();
-    await expect(launchAtlas.locator('svg')).toHaveCSS(
-      'animation-name',
-      'launch-rocket',
-    );
-    await page
-      .getByRole('navigation', { name: 'Primary navigation' })
-      .getByRole('link', { name: 'Working groups' })
-      .click();
+    // GitHub is the nav's last link, right after Contact; genomeOS Atlas
+    // stands outside the nav.
+    const primary = page.getByRole('navigation', {
+      name: 'Primary navigation',
+    });
+    expect(
+      await primary
+        .getByRole('link')
+        .evaluateAll((links) =>
+          links.map(
+            (link) =>
+              link.getAttribute('aria-label') ?? link.textContent!.trim(),
+          ),
+        ),
+    ).toEqual([
+      'Projects',
+      'Contribute',
+      'Docs',
+      'Contact',
+      'View genomeOS on GitHub',
+    ]);
+    await expect(
+      primary.getByRole('link', { name: 'genomeOS Atlas' }),
+    ).toHaveCount(0);
+    await primary.getByRole('link', { name: 'Contribute' }).click();
   }
 
-  await expect(page).toHaveURL(/\/working-groups\/$/);
+  await expect(page).toHaveURL(/\/contribute\/$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    'Choose the part of the problem',
+    'Find work that fits how you think.',
   );
+});
+
+// Round 2 (spec §1.1, R2-4): one nav list everywhere. The site header, its Menu, the docs header
+// and the 404 read PRIMARY_NAV, so they name the same links in the same order.
+const NAV_NAMES = [
+  'Projects',
+  'Contribute',
+  'Docs',
+  'Contact',
+  'View genomeOS on GitHub',
+];
+const linkNames = (scope: Locator) =>
+  scope
+    .getByRole('link')
+    .evaluateAll((links) =>
+      links.map(
+        (link) => link.getAttribute('aria-label') ?? link.textContent!.trim(),
+      ),
+    );
+
+test(
+  'the site header, the docs header and the 404 name the same nav',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    for (const route of ['/', '/projects/', '/docs/', '/404.html']) {
+      await page.goto(route);
+      expect(
+        await linkNames(
+          page.getByRole('navigation', { name: 'Primary navigation' }),
+        ),
+        route,
+      ).toEqual(NAV_NAMES);
+    }
+  },
+);
+
+test(
+  'the Menu names the same nav',
+  { tag: '@mobile-chromium' },
+  async ({ page }) => {
+    await page.goto('/');
+    await page.getByText('Menu', { exact: true }).click();
+    const names = await linkNames(
+      page.getByRole('navigation', { name: 'Mobile navigation' }),
+    );
+    expect(names.filter((name) => NAV_NAMES.includes(name))).toEqual(NAV_NAMES);
+  },
+);
+
+test(
+  'the docs header shows the GitHub link wherever the sidebar is not the mobile menu',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // From 50em Starlight's sidebar sits beside the page, so the mobile menu's social icons are
+    // gone; the header's own GitHub link must take over there, not only from 72em (#454 review).
+    for (const width of [800, 900, 1100, 1151, 1152, 1200, 1300, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/docs/');
+      const github = page
+        .locator('header')
+        .getByRole('link', { name: 'View genomeOS on GitHub' });
+      await expect(github, `${width} px`).toBeVisible();
+      await expect(github).toHaveAttribute(
+        'href',
+        'https://github.com/genomeOS/genomeOS',
+      );
+      // The page links join it once there is room for the whole nav: from 72em, and an em in a
+      // media query is the 16 px initial size, not the 18 px root, so from 1,152 px.
+      for (const name of ['Contribute', 'Contact'])
+        await expect(
+          page
+            .getByRole('navigation', { name: 'Primary navigation' })
+            .getByRole('link', { name }),
+          `${name} at ${width} px`,
+        ).toBeVisible({ visible: width >= 1152 });
+      // The docs header holds one row: nothing overflows it.
+      expect(
+        await page.evaluate(() => {
+          const row = document.querySelector('.docs-header')!;
+          return row.scrollWidth - row.clientWidth;
+        }),
+        `${width} px`,
+      ).toBeLessThanOrEqual(0);
+    }
+  },
+);
+
+// Design critique of the integrated build, round 2: at 1,024 px the docs bar had no primary nav and
+// no "Menu +" where site pages show it, and its Atlas pill wore a line globe and dropped the arrow
+// at 1,440 px. The pill is the site's at every width (the favicon's colour globe, the arrow
+// wherever the site's pill shows one), and from 50em to 72em the bar shows the site's Menu.
+test(
+  'the docs Atlas pill is the site pill: its colour globe, and its arrow where the site shows one',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // (The docs nav takes the row from 72em, so the compact pill starts there, a pixel before the
+    // site's 72.01rem; 1,152 px itself is left out.)
+    for (const width of [800, 1024, 1151, 1153, 1300, 1392, 1393, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/contribute/');
+      const site = await page
+        .locator('.launch-atlas-cta__arrow')
+        .evaluate((arrow) => arrow.checkVisibility());
+      await page.goto('/docs/');
+      const docs = await page
+        .locator('.docs-header__atlas')
+        .evaluate((pill) => ({
+          arrow: pill
+            .querySelector('.docs-header__atlas-arrow')!
+            .checkVisibility(),
+          stops: [...pill.querySelectorAll('stop')].map((stop) =>
+            stop.getAttribute('stop-color'),
+          ),
+          mark: pill
+            .querySelector('.docs-header__atlas-mark')!
+            .getBoundingClientRect().width,
+        }));
+      expect(docs.arrow, `${width} px arrow`).toBe(site);
+      // The favicon's gradient, from ion to violet, on the favicon's globe.
+      expect(docs.stops[0], `${width} px`).toBe('#12ffff');
+      expect(docs.stops.at(-1), `${width} px`).toBe('#9d11fc');
+      expect(docs.mark, `${width} px`).toBeGreaterThanOrEqual(20);
+    }
+  },
+);
+
+test(
+  'the docs bar shows the site’s "Menu +" from 50em to 72em, and it opens on the page links',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    for (const width of [800, 1024, 1151, 1152, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/docs/');
+      const menu = page.locator('header details.docs-menu');
+      const summary = menu.locator('summary');
+      await expect(summary, `${width} px`).toBeVisible({
+        visible: width < 1152,
+      });
+      if (width >= 1152) continue;
+      await expect(summary).toHaveText('Menu');
+      const target = (await summary.boundingBox())!;
+      expect(target.height, `${width} px`).toBeGreaterThanOrEqual(44);
+      await summary.click();
+      const nav = page.getByRole('navigation', { name: 'Site navigation' });
+      await expect(nav).toBeVisible();
+      expect(await linkNames(nav)).toEqual(
+        NAV_NAMES.filter((name) => name !== 'View genomeOS on GitHub'),
+      );
+      await expect(nav.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      // It stays inside the screen, and Escape closes it, focus back on its summary.
+      const panel = (await nav.boundingBox())!;
+      expect(panel.x, `${width} px`).toBeGreaterThanOrEqual(0);
+      expect(panel.x + panel.width, `${width} px`).toBeLessThanOrEqual(width);
+      await nav.getByRole('link', { name: 'Projects' }).focus();
+      await page.keyboard.press('Escape');
+      await expect(nav).toBeHidden();
+      await expect(summary).toBeFocused();
+      // A press outside closes it too.
+      await summary.click();
+      await expect(nav).toBeVisible();
+      await page
+        .locator('main p')
+        .first()
+        .click({ position: { x: 2, y: 2 } });
+      await expect(nav).toBeHidden();
+    }
+  },
+);
+
+// Design review, round 2: the docs header set its nav right-aligned after Search, at weight 560 in
+// a lighter grey, with GitHub 2 px above the others, so from Home to Docs the primary nav jumped
+// about 440 px and changed weight. It reads as the site's: lockup, nav, then Search and the Atlas
+// link on the right; the site's weight and colours; one baseline.
+test(
+  'the docs header orders and sets its nav as the site header does',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const style = () =>
+      page
+        .getByRole('navigation', { name: 'Primary navigation' })
+        .getByRole('link')
+        .evaluateAll((links) =>
+          links.map((link) => {
+            const label = link.querySelector('span') ?? link;
+            const { fontWeight, color, fontSize } = getComputedStyle(label);
+            return [
+              link.getAttribute('aria-current') ? 'current' : 'link',
+              fontWeight,
+              color,
+              fontSize,
+            ].join(' ');
+          }),
+        );
+    for (const width of [1440, 1153, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/contribute/');
+      const site = await style();
+      // Design review, round 3: the lockup and the nav also stand where the compact site header
+      // puts them (the site gutter and 76rem container, the compact lockup), so neither jumps.
+      await page.evaluate(() => window.scrollTo(0, 900));
+      await expect(page.locator('.site-header')).toHaveClass(
+        /site-header--compact/,
+      );
+      const siteLogo = page.locator('.wordmark__logo');
+      const compactWidth = (2.6 * 18 * 1395) / 300;
+      await expect
+        .poll(async () => (await siteLogo.boundingBox())!.width)
+        .toBeCloseTo(compactWidth, 0);
+      const siteHeader = await page.evaluate(() => ({
+        lockup: document
+          .querySelector('.wordmark__logo')!
+          .getBoundingClientRect()
+          .toJSON() as DOMRect,
+        firstLink: document
+          .querySelector('nav[aria-label="Primary navigation"] a')!
+          .getBoundingClientRect()
+          .toJSON() as DOMRect,
+      }));
+      for (const route of ['/docs/', '/docs/system-overview/']) {
+        await page.goto(route);
+        const docs = await style();
+        // Docs is current here as Contribute is there; current and plain links match the site's.
+        expect(docs[2], `${route} at ${width}`).toBe(site[1]);
+        expect(
+          docs.filter((_, index) => index !== 2),
+          `${route} at ${width}`,
+        ).toEqual(site.filter((_, index) => index !== 1));
+        const geometry = await page.evaluate(() => {
+          const header = document.querySelector('header')!;
+          const nav = header.querySelector(
+            'nav[aria-label="Primary navigation"]',
+          )!;
+          const search = header.querySelector('button[data-open-modal]')!;
+          const box = (element: Element) =>
+            element.getBoundingClientRect().toJSON();
+          const baselines = [...nav.querySelectorAll('a')].map((link) => {
+            const range = document.createRange();
+            range.selectNodeContents(link.querySelector('span') ?? link);
+            return range.getBoundingClientRect().bottom;
+          });
+          return {
+            lockup: box(header.querySelector('.docs-header__lockup')!),
+            nav: box(nav),
+            firstLink: box(nav.querySelector('a')!),
+            search: box(search),
+            atlas: box(header.querySelector('.docs-header__atlas')!),
+            navFirst: Boolean(
+              nav.compareDocumentPosition(search) &
+              Node.DOCUMENT_POSITION_FOLLOWING,
+            ),
+            baselines,
+          };
+        });
+        const at = `${route} at ${width}`;
+        for (const edge of ['left', 'width'] as const)
+          expect(
+            Math.abs(geometry.lockup[edge] - siteHeader.lockup[edge]),
+            `${at}: lockup ${edge}`,
+          ).toBeLessThan(1);
+        expect(
+          Math.abs(geometry.firstLink.left - siteHeader.firstLink.left),
+          `${at}: first nav link`,
+        ).toBeLessThan(1);
+        // (Round 2 held the nav within 80 px of the lockup; it now stands exactly where the site
+        // header puts it, after the landing lockup's slot, 134 px after the compact lockup at 1440.)
+        expect(geometry.nav.left, at).toBeGreaterThan(geometry.lockup.right);
+        expect(geometry.search.left, at).toBeGreaterThan(geometry.nav.right);
+        expect(geometry.atlas.left, at).toBeGreaterThanOrEqual(
+          geometry.search.right,
+        );
+        expect(geometry.navFirst, `${at}: tab order`).toBe(true);
+        expect(
+          Math.max(...geometry.baselines) - Math.min(...geometry.baselines),
+          `${at}: one baseline`,
+        ).toBeLessThan(0.75);
+      }
+    }
+  },
+);
+
+// Contact page spec §1 (review 3, I-1): with Contact in the nav, Search had 75 px at 1,152 px. Its
+// magnifier shrank to nothing and its key hint ran 50 px onto the Atlas link, while the header's
+// row still fit and the boxes still lined up, so this looks inside the button. Search sheds its
+// key hint, then its label, where its room is too small. "Ctrl K" is the wider hint and shows on
+// Linux and Windows, "⌘ K" on a Mac, so both are checked whatever the host.
+for (const [platform, hint] of [
+  ['MacIntel', '⌘K'],
+  ['Linux x86_64', 'CtrlK'],
+] as const) {
+  test(
+    `the docs Search keeps its magnifier whole and its key hint clear of the Atlas link (${hint})`,
+    { tag: '@desktop-chromium' },
+    async ({ page }) => {
+      await page.addInitScript((value) => {
+        Object.defineProperty(Navigator.prototype, 'platform', {
+          get: () => value,
+        });
+      }, platform);
+      const widths = [
+        800, 1100, 1151, 1152, 1153, 1180, 1200, 1240, 1280, 1300, 1392, 1440,
+        1920,
+      ];
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto('/docs/');
+        await page.evaluate(() => document.fonts.ready);
+        const search = page.locator('header button[data-open-modal]');
+        await expect(search).toBeEnabled();
+        await expect(search).toHaveAccessibleName('Search');
+        const at = `${width} px`;
+        const parts = await search.evaluate((button) => {
+          const box = (element: Element) =>
+            element.getBoundingClientRect().toJSON() as DOMRect;
+          const [icon, label, kbd] = [...button.children];
+          return {
+            overflow: button.scrollWidth - button.clientWidth,
+            button: box(button),
+            icon: box(icon),
+            iconEm: parseFloat(getComputedStyle(icon).fontSize),
+            shown: [...button.children]
+              .filter((part) => part.checkVisibility())
+              .map((part) => ({ tag: part.tagName, ...box(part) })),
+            label: label.checkVisibility(),
+            kbd: kbd.checkVisibility()
+              ? { text: kbd.textContent, right: box(kbd).right }
+              : null,
+            atlas: box(document.querySelector('.docs-header__atlas')!),
+          };
+        });
+        expect(parts.overflow, `${at}: overflow`).toBeLessThanOrEqual(0);
+        // The magnifier is whole: 1em across, as Starlight draws it.
+        expect(parts.icon.width, `${at}: magnifier`).toBeCloseTo(
+          parts.iconEm,
+          0,
+        );
+        for (const part of parts.shown) {
+          expect(part.left, `${at}: ${part.tag}`).toBeGreaterThanOrEqual(
+            parts.button.left,
+          );
+          expect(part.right, `${at}: ${part.tag}`).toBeLessThanOrEqual(
+            parts.button.right,
+          );
+        }
+        expect(parts.button.right, at).toBeLessThanOrEqual(parts.atlas.left);
+        expect(parts.button.width, `${at}: target`).toBeGreaterThanOrEqual(44);
+        expect(parts.button.height, `${at}: target`).toBeGreaterThanOrEqual(44);
+        if (parts.kbd) {
+          expect(parts.kbd.text, at).toBe(hint);
+          expect(parts.kbd.right, `${at}: key hint`).toBeLessThan(
+            parts.atlas.left,
+          );
+        }
+        // Search narrows first (round 2 spec §1.1), now that the Docs theme toggle sits beside it
+        // (§4.4), and the bar carries the site's "Menu +" up to 72em and the pill's arrow wherever
+        // the site's pill has it (design critique of the integrated build, round 2): the label and
+        // its key hint where there is room (about 1,000 px to 72em, and from 1,472 px); the label
+        // alone at 1,392 and 1,440 px; and the bare magnifier at 800 px and where the whole nav
+        // first shows (1,152 to 1,300 px).
+        if ((width >= 1000 && width < 1152) || width >= 1472) {
+          expect(parts.label, `${at}: label`).toBe(true);
+          expect(parts.kbd?.text, `${at}: key hint`).toBe(hint);
+        }
+        if (width === 1392 || width === 1440) {
+          expect(parts.label, `${at}: label`).toBe(true);
+          expect(parts.kbd, `${at}: no key hint`).toBeNull();
+        }
+        if (width <= 1153)
+          expect(
+            parts.shown.map(({ tag }) => tag),
+            at,
+          ).toEqual(
+            width === 800
+              ? ['svg']
+              : width < 1152
+                ? ['svg', 'SPAN', 'KBD']
+                : ['svg'],
+          );
+        if (width >= 1152 && width <= 1300)
+          expect(
+            parts.shown.map(({ tag }) => tag),
+            at,
+          ).toEqual(['svg']);
+      }
+      // The bare magnifier still opens Search, by pointer and by the shortcut it no longer shows.
+      await page.setViewportSize({ width: 1153, height: 800 });
+      await page.goto('/docs/');
+      const search = page.locator('header button[data-open-modal]');
+      await expect(search).toBeEnabled();
+      const dialog = page.getByRole('dialog', { name: 'Search' });
+      await search.click();
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await page.keyboard.press('ControlOrMeta+k');
+      await expect(dialog).toBeVisible();
+    },
+  );
+}
+
+// The docs shell speaks the site's visual language, not stock Starlight (design review, round 1):
+// Raleway at the site's weights and tracking, square controls, a square ion-ruled current item, and
+// the current page shown as the site shows it (no underline). Round 2 (spec §4.4, R2-9): paper is
+// the default, with display type 20 heavier and the current page in ink; the dark choice keeps
+// round 1's values. The site header's current "Docs" is the site's bar in both.
+const DOCS_THEMES = {
+  paper: { h1: '390', h2: '420', current: 'rgb(7, 24, 49)' },
+  dark: { h1: '370', h2: '400', current: 'rgb(242, 248, 255)' },
+} as const;
+const DOCS_PAGER = {
+  paper: { rule: 'rgba(0, 106, 130, 0.2)', hover: 'rgb(0, 106, 130)' },
+  dark: { rule: 'rgba(112, 230, 255, 0.18)', hover: 'rgb(112, 230, 255)' },
+} as const;
+const chooseDocsTheme = (page: Page, theme: keyof typeof DOCS_THEMES) =>
+  theme === 'dark'
+    ? page.addInitScript(() => localStorage.setItem('starlight-theme', 'dark'))
+    : Promise.resolve();
+
+for (const theme of ['paper', 'dark'] as const) {
+  test(`the docs shell uses the site’s type, square controls and current-page mark (${theme})`, async ({
+    page,
+    isMobile,
+  }) => {
+    const pins = DOCS_THEMES[theme];
+    await chooseDocsTheme(page, theme);
+    await page.goto('/docs/system-overview/');
+    const h1 = page.getByRole('heading', { level: 1 });
+    await expect(h1).toHaveCSS('font-weight', pins.h1);
+    await expect(h1).toHaveCSS('letter-spacing', /^-/);
+    const h2 = page.locator('.sl-markdown-content h2').first();
+    await expect(h2).toHaveCSS('font-weight', pins.h2);
+    if (isMobile) {
+      const menu = page.locator('.sl-menu-button');
+      await expect(menu).toHaveCSS('border-radius', '0px');
+      await expect(menu).not.toHaveCSS(
+        'background-color',
+        'rgb(242, 248, 255)',
+      );
+      await menu.click();
+    } else {
+      await expect(page.locator('button[data-open-modal]')).toHaveCSS(
+        'border-radius',
+        '0px',
+      );
+    }
+    const current = page.locator('#starlight__sidebar a[aria-current="page"]');
+    await expect(current).toHaveCSS('border-radius', '0px');
+    await expect(current).toHaveCSS('color', pins.current);
+    if (!isMobile) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const docs = page
+        .getByRole('navigation', { name: 'Primary navigation' })
+        .getByRole('link', { name: 'Docs' });
+      await expect(docs).toHaveCSS('color', 'rgb(242, 248, 255)');
+      await expect(docs).toHaveCSS('box-shadow', 'none');
+      await expect(docs).toHaveCSS('text-decoration-line', 'none');
+    }
+  });
+
+  // Design review, round 3: the previous and next cards were Starlight's rounded grey cards, set
+  // 4 px above the footer's Privacy link, and the docs H1 ran larger than the site's page H1.
+  test(`the docs pager cards are the site’s square link cards, clear of the footer links (${theme})`, async ({
+    page,
+    isMobile,
+  }) => {
+    const pins = DOCS_PAGER[theme];
+    await page.goto('/contribute/');
+    const siteH1 = await page
+      .getByRole('heading', { level: 1 })
+      .evaluate((heading) => getComputedStyle(heading).fontSize);
+    await chooseDocsTheme(page, theme);
+    await page.goto('/docs/system-overview/');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCSS(
+      'font-size',
+      siteH1,
+    );
+    const cards = page.locator('.pagination-links a');
+    await expect(cards).toHaveCount(2);
+    for (const card of await cards.all()) {
+      await expect(card).toHaveCSS('border-radius', '0px');
+      await expect(card).toHaveCSS('border-top-color', pins.rule);
+      await expect(card).toHaveCSS('box-shadow', 'none');
+    }
+    const gap = await page.evaluate(() => {
+      const last = [...document.querySelectorAll('.pagination-links a')].at(
+        -1,
+      )!;
+      const privacy = document.querySelector('.docs-site-links a')!;
+      return (
+        privacy.getBoundingClientRect().top -
+        last.getBoundingClientRect().bottom
+      );
+    });
+    // At least 2rem (36 px at the 18 px root).
+    expect(gap).toBeGreaterThanOrEqual(36);
+    if (!isMobile) {
+      await cards.first().hover();
+      await expect(cards.first()).toHaveCSS('border-top-color', pins.hover);
+    }
+  });
+}
+
+test('a docs section heading draws one full-width rule, even when it wraps', async ({
+  page,
+}) => {
+  // Starlight sets a heading inline beside its anchor link, so a rule on the h2 itself spanned
+  // only the heading's first line (#454 design review).
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of ['/docs/', '/docs/scientific-safeguards/']) {
+      await page.goto(route);
+      const rules = await page.evaluate(() => {
+        const content = document
+          .querySelector('.sl-markdown-content')!
+          .getBoundingClientRect().width;
+        return [...document.querySelectorAll('.sl-markdown-content h2')].map(
+          (heading) => {
+            const host = heading.closest('.sl-heading-wrapper') ?? heading;
+            return {
+              heading: heading.textContent?.trim(),
+              rule: getComputedStyle(host).borderTopWidth,
+              widthMatches:
+                Math.abs(host.getBoundingClientRect().width - content) < 1,
+              innerRule:
+                host === heading
+                  ? '0px'
+                  : getComputedStyle(heading).borderTopWidth,
+            };
+          },
+        );
+      });
+      expect(rules.length, `${route} at ${width} px`).toBeGreaterThan(0);
+      for (const rule of rules)
+        expect(rule, `${route} at ${width} px`).toMatchObject({
+          rule: '1px',
+          widthMatches: true,
+          innerRule: '0px',
+        });
+    }
+  }
 });
 
 test('Atlas status replaces the launch action only on the Atlas page', async ({
@@ -104,31 +710,623 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   await page.goto('/app/');
   const header = page.locator('.site-header');
   await expect(
-    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+    header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
   ).toHaveCount(0);
   await expect(header.getByLabel('Atlas status')).toContainText(
-    /loading catalog|loading artifact|validating|rendering|Atlas ready/i,
+    /loading|validating|rendering|revealing|Atlas ready/i,
   );
 
-  await page.goto('/project/');
+  await page.goto('/projects/');
   await expect(header.getByLabel('Atlas status')).toHaveCount(0);
   await expect(
-    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+    header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
   ).toBeVisible();
+});
+
+/** The header's genomeOS Atlas link on the lockup pages. */
+function atlasLink(page: Page): Locator {
+  return page
+    .locator('[data-site-header]')
+    .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+}
+
+/** The caption's vertical offset from its resting place (its slide). */
+function captionSlide(caption: Locator): Promise<number> {
+  return caption.evaluate(
+    (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+  );
+}
+
+/** Its transition durations, in seconds. */
+function captionDurations(caption: Locator): Promise<number[]> {
+  return caption.evaluate((element) =>
+    getComputedStyle(element)
+      .transitionDuration.split(',')
+      .map((duration) => Number.parseFloat(duration)),
+  );
+}
+
+/** Where the shown caption lies against its button, the row and the screen. */
+function measureAtlasCaption(page: Page) {
+  return page.evaluate(() => {
+    const cta = document
+      .querySelector('.launch-atlas-cta')!
+      .getBoundingClientRect();
+    const caption = document.querySelector('.launch-atlas-cta__caption')!;
+    const box = caption.getBoundingClientRect();
+    const inner = document.querySelector('.site-header__inner')!;
+    const hit = document.elementFromPoint(
+      (box.left + box.right) / 2,
+      (box.top + box.bottom) / 2,
+    );
+    return {
+      belowButton: box.top - cta.bottom,
+      bottom: box.bottom,
+      centreOffset: (box.left + box.right) / 2 - (cta.left + cta.right) / 2,
+      innerOverflow: inner.scrollWidth - inner.clientWidth,
+      left: box.left,
+      pageOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+      // A press there reaches the page under it, not the caption or the link.
+      passesThrough:
+        hit !== null &&
+        !hit.closest('.launch-atlas-cta, .launch-atlas-cta__caption'),
+      pointerEvents: getComputedStyle(caption).pointerEvents,
+      right: box.right,
+      screenHeight: window.innerHeight,
+      screenWidth: document.documentElement.clientWidth,
+    };
+  });
+}
+
+/** Settles a compact header: its 200 ms height transition has run. */
+async function scrollToCompact(page: Page, top: number): Promise<void> {
+  await page.evaluate(
+    (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+    top,
+  );
+  const header = page.locator('[data-site-header]');
+  await expect(header).toHaveClass(/site-header--compact/);
+  await expect
+    .poll(async () => (await header.boundingBox())!.height)
+    .toBeCloseTo(71.2, 0);
+}
+
+test(
+  'hovering or keyboard-focusing genomeOS Atlas reveals "Explore the interactive app" under it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const header = page.locator('[data-site-header]');
+    const atlas = atlasLink(page);
+    const caption = header.locator('.launch-atlas-cta__caption');
+
+    // 1153 px: the narrower button beside the full nav; 737 px: the narrowest
+    // row where the button shows its name (beside Menu).
+    for (const [width, scrollY] of [
+      [1440, 0],
+      [1440, 600],
+      [1153, 0],
+      [737, 0],
+    ] as const) {
+      const label = `${width} px, scrolled ${scrollY}`;
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      if (scrollY) await scrollToCompact(page, scrollY);
+      await expect(caption, label).toHaveText('Explore the interactive app');
+      await expect(caption, label).toBeHidden();
+      // It waits above its resting place, to slide down into it.
+      expect(await captionSlide(caption), label).toBeLessThan(-4);
+      expect(
+        Math.max(...(await captionDurations(caption))),
+        label,
+      ).toBeGreaterThan(0);
+      const row = await header.boundingBox();
+
+      await atlas.hover();
+      await expect(caption, label).toBeVisible();
+      await expect(caption, label).toHaveCSS('opacity', '1');
+      await expect
+        .poll(() => captionSlide(caption), { message: label })
+        .toBe(0);
+      const shown = await measureAtlasCaption(page);
+      expect(shown.belowButton, label).toBeGreaterThanOrEqual(4);
+      expect(Math.abs(shown.centreOffset), label).toBeLessThanOrEqual(1);
+      expect(shown.left, label).toBeGreaterThanOrEqual(0);
+      expect(shown.right, label).toBeLessThanOrEqual(shown.screenWidth);
+      expect(shown.bottom, label).toBeLessThanOrEqual(shown.screenHeight);
+      expect(shown.innerOverflow, label).toBeLessThanOrEqual(0);
+      expect(shown.pageOverflow, label).toBeLessThanOrEqual(0);
+      expect(shown.pointerEvents, label).toBe('none');
+      expect(shown.passesThrough, label).toBe(true);
+      // It floats over the page: the header keeps its size.
+      expect(await header.boundingBox(), label).toEqual(row);
+
+      await page.mouse.move(8, 400);
+      await expect(caption, label).toBeHidden();
+    }
+
+    // Keyboard focus shows it too: Tab on from GitHub, the nav's last link.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'View genomeOS on GitHub' })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(atlas).toBeFocused();
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Shift+Tab');
+    await expect(caption).toBeHidden();
+  },
+);
+
+test(
+  'the aurora drifts and the caption slides, except under reduced motion',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const curtains = page.locator('.launch-atlas-cta__lights i');
+    const caption = page.locator('.launch-atlas-cta__caption');
+    const names = ['launch-aurora-a', 'launch-aurora-b', 'launch-aurora-c'];
+    await page.goto('/');
+    await expect(curtains).toHaveCount(3);
+    for (const [index, name] of names.entries())
+      await expect(curtains.nth(index)).toHaveCSS('animation-name', name);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const index of names.keys())
+      await expect(curtains.nth(index)).toHaveCSS('animation-name', 'none');
+    await expect(caption).toBeHidden();
+    expect(await captionSlide(caption)).toBe(0);
+    await atlasLink(page).hover();
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('opacity', '1');
+    expect(await captionSlide(caption)).toBe(0);
+    expect(Math.max(...(await captionDurations(caption)))).toBe(0);
+  },
+);
+
+test(
+  'the aurora drifts through the first 20 s on a page, then holds still until hovered or focused',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // A drift that never ended kept the compositor drawing 60 frames a
+    // second for as long as the page was open. The clock runs the page's
+    // timers; the curtains keep the real one.
+    await page.clock.install();
+    await page.goto('/projects/');
+    const curtains = page.locator('.launch-atlas-cta__lights i');
+    await expect(curtains).toHaveCount(3);
+    const playStates = () =>
+      curtains.evaluateAll((elements) =>
+        elements.map((element) =>
+          element
+            .getAnimations()
+            .map((animation) => animation.playState)
+            .join(),
+        ),
+      );
+    // Once each pause has taken hold (a pause waits for the next frame).
+    const times = () =>
+      curtains.evaluateAll((elements) =>
+        Promise.all(
+          elements.map(async (element) => {
+            const [animation] = element.getAnimations();
+            await animation.ready;
+            return animation.currentTime;
+          }),
+        ),
+      );
+    const drifting = ['running', 'running', 'running'];
+    const resting = ['paused', 'paused', 'paused'];
+
+    expect(await playStates()).toEqual(drifting);
+    await page.clock.runFor(19_000);
+    expect(await playStates()).toEqual(drifting);
+    await page.clock.runFor(1_500);
+    await expect.poll(playStates).toEqual(resting);
+    // Held still where it was, and still lit.
+    const held = await times();
+    await page.waitForTimeout(300);
+    expect(await times()).toEqual(held);
+    await expect(page.locator('.launch-atlas-cta__lights')).toBeVisible();
+
+    // Hovered, it drifts on from there, and rests again once left.
+    await atlasLink(page).hover();
+    await expect.poll(playStates).toEqual(drifting);
+    await page.mouse.move(8, 400);
+    await expect.poll(playStates).toEqual(resting);
+
+    // Keyboard focus wakes it too.
+    await page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'View genomeOS on GitHub' })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(atlasLink(page)).toBeFocused();
+    await expect.poll(playStates).toEqual(drifting);
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(playStates).toEqual(resting);
+  },
+);
+
+test(
+  'in forced colours genomeOS Atlas keeps a system border and drops the aurora',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.goto('/');
+    const atlas = atlasLink(page);
+    const lights = atlas.locator('.launch-atlas-cta__lights');
+    await expect(lights).toBeVisible();
+    await page.emulateMedia({ forcedColors: 'active' });
+    await expect(atlas).toHaveCSS('border-top-style', 'solid');
+    await expect(atlas).toHaveCSS('border-top-width', '1px');
+    await expect(lights).toBeHidden();
+  },
+);
+
+test(
+  'touch screens and phone-width windows do without the caption',
+  { tag: '@desktop-chromium' },
+  async ({ browser, page }) => {
+    const expectNoCaption = async (on: Page, label: string) => {
+      await on.goto('/');
+      const atlas = atlasLink(on);
+      const caption = on.locator('.launch-atlas-cta__caption');
+      await expect(atlas, label).toHaveAccessibleDescription(
+        'Explore the interactive app',
+      );
+      await atlas.focus();
+      await expect(atlas, label).toBeFocused();
+      expect(
+        await atlas.evaluate((element) => element.matches(':focus-visible')),
+        label,
+      ).toBe(true);
+      await expect(caption, label).toBeHidden();
+      await atlas.hover();
+      await expect(caption, label).toBeHidden();
+    };
+
+    // A touch screen as wide as a laptop: it shows the button's name, but a
+    // tap would only flash the caption on the way to the Atlas.
+    const touch = await browser.newContext({
+      hasTouch: true,
+      viewport: { width: 1280, height: 800 },
+    });
+    const tablet = await touch.newPage();
+    await expectNoCaption(tablet, 'touch screen at 1280 px');
+    expect(
+      await tablet.evaluate(() => matchMedia('(hover: none)').matches),
+    ).toBe(true);
+    await touch.close();
+
+    // A window with a mouse at phone width, where the button is the globe
+    // mark alone.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectNoCaption(page, 'mouse at 390 px');
+  },
+);
+
+test(
+  'GitHub sits in the primary nav right after Contact, set exactly like it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const compare = () =>
+      page.evaluate(() => {
+        const nav = document.querySelector('nav.desktop-nav')!;
+        const links = [...nav.querySelectorAll('a')];
+        const contact = links.find(
+          (link) => link.textContent!.trim() === 'Contact',
+        )!;
+        const github = nav.querySelector<HTMLAnchorElement>('.github-link')!;
+        const githubText = github.querySelector('span')!;
+        const type = (element: Element) => {
+          const style = getComputedStyle(element);
+          return {
+            colour: style.color,
+            family: style.fontFamily,
+            lineHeight: style.lineHeight,
+            size: style.fontSize,
+            weight: style.fontWeight,
+          };
+        };
+        const text = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const { top, bottom } = range.getBoundingClientRect();
+          return { top, bottom };
+        };
+        return {
+          after: links.indexOf(github) - links.indexOf(contact),
+          contact: { text: text(contact), type: type(contact) },
+          github: { text: text(githubText), type: type(githubText) },
+          last: links[links.length - 1] === github,
+        };
+      });
+    const expectAligned = async (label: string) => {
+      const measured = await compare();
+      expect(measured.after, label).toBe(1);
+      expect(measured.last, label).toBe(true);
+      expect(measured.github.type, label).toEqual(measured.contact.type);
+      for (const edge of ['top', 'bottom'] as const)
+        expect(
+          Math.abs(measured.github.text[edge] - measured.contact.text[edge]),
+          `${label}: text ${edge}`,
+        ).toBeLessThanOrEqual(0.5);
+    };
+
+    for (const width of [1153, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of ['/', '/projects/']) {
+        await page.goto(route);
+        await page.evaluate(() => document.fonts.ready);
+        await expectAligned(`${route} at ${width} px, landing`);
+        await scrollToCompact(page, 600);
+        await expectAligned(`${route} at ${width} px, compact`);
+      }
+    }
+    // The Atlas page's nav, beside its status chip.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/app/');
+    await page.evaluate(() => document.fonts.ready);
+    await expectAligned('/app/ at 1440 px');
+  },
+);
+
+test(
+  'genomeOS Atlas stands alone, centred right of the nav, and beside Menu up to 72rem',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const layout = () =>
+      page.evaluate(() => {
+        const edges = (element: Element | null) => {
+          if (!element || element.getClientRects().length === 0) return null;
+          const { left, right } = element.getBoundingClientRect();
+          return { left, right };
+        };
+        const cta = document.querySelector('.launch-atlas-cta')!;
+        const items = [...document.querySelectorAll('nav.desktop-nav li')].map(
+          (item) => item.getBoundingClientRect(),
+        );
+        return {
+          arrow:
+            cta.querySelector('.launch-atlas-cta__arrow')!.getClientRects()
+              .length > 0,
+          beforeMenu:
+            cta
+              .closest('.launch-atlas')!
+              .nextElementSibling?.matches('details.mobile-nav') ?? false,
+          cta: edges(cta)!,
+          inNav: cta.closest('nav') !== null,
+          inner: edges(document.querySelector('.site-header__inner'))!,
+          menu: edges(document.querySelector('.mobile-nav summary')),
+          nav: edges(
+            document.querySelector('.site-header__inner > nav.desktop-nav'),
+          ),
+          navGaps: items
+            .slice(1)
+            .map((item, index) => item.left - items[index].right),
+        };
+      });
+
+    // 1366 px: a common laptop width. 1377 px: where the full button came
+    // back at 86rem, 1.2 px further from GitHub than the nav's own gaps.
+    // 1392 and 1393 px: the last width with the narrower button (87rem) and
+    // the first with the full one.
+    for (const width of [1280, 1366, 1377, 1392, 1393, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      for (const state of ['landing', 'compact'] as const) {
+        if (state === 'compact') await scrollToCompact(page, 600);
+        const label = `${width} px, ${state}`;
+        const row = await layout();
+        expect(row.inNav, label).toBe(false);
+        expect(row.menu, label).toBeNull();
+        const centre = (row.cta.left + row.cta.right) / 2;
+        const room = (row.nav!.right + row.inner.right) / 2;
+        expect(Math.abs(centre - room), label).toBeLessThanOrEqual(2);
+        // Clearly further from GitHub than the links are from each other,
+        // so it reads as its own control, not one more nav link.
+        expect(
+          row.cta.left - row.nav!.right - Math.max(...row.navGaps),
+          label,
+        ).toBeGreaterThanOrEqual(4);
+        expect(row.arrow, label).toBe(width > 1392);
+      }
+    }
+
+    for (const width of [737, 1100, 1152]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      const label = `${width} px`;
+      const row = await layout();
+      expect(row.nav, label).toBeNull();
+      expect(row.beforeMenu, label).toBe(true);
+      // One 0.8rem gap (14.4 px) before the Menu, at the row's end.
+      expect(row.menu!.left - row.cta.right, label).toBeCloseTo(14.4, 0);
+      expect(row.menu!.right, label).toBeLessThanOrEqual(row.inner.right + 0.5);
+    }
+  },
+);
+
+test('the aurora around genomeOS Atlas never widens the page, is not clipped, and takes no pointer events', async ({
+  page,
+  isMobile,
+}) => {
+  const widths = isMobile
+    ? [320, 360, 412]
+    : [737, 1100, 1152, 1153, 1280, 1392, 1393, 1440, 1920];
+  const measure = () =>
+    page.evaluate(() => {
+      const cta = document.querySelector('.launch-atlas-cta')!;
+      const lights = cta.querySelector('.launch-atlas-cta__lights')!;
+      const ctaBox = cta.getBoundingClientRect();
+      const lightsBox = lights.getBoundingClientRect();
+      const inner = document.querySelector('.site-header__inner')!;
+      // Nothing between the lights and the page clips them.
+      const clippedBy: string[] = [];
+      for (
+        let element: Element | null = lights;
+        element && element !== document.documentElement;
+        element = element.parentElement
+      ) {
+        const style = getComputedStyle(element);
+        if (
+          style.overflowX !== 'visible' ||
+          style.overflowY !== 'visible' ||
+          style.clipPath !== 'none' ||
+          /paint|strict|content/.test(style.contain)
+        )
+          clippedBy.push(element.className || element.tagName);
+      }
+      // A point in the spill beside the button, at its vertical centre.
+      const hit = document.elementFromPoint(
+        ctaBox.left - 6,
+        (ctaBox.top + ctaBox.bottom) / 2,
+      );
+      return {
+        clippedBy,
+        innerOverflow: inner.scrollWidth - inner.clientWidth,
+        pageOverflow:
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+        pointerEvents: [lights, ...lights.children].map(
+          (element) => getComputedStyle(element).pointerEvents,
+        ),
+        spillLeft: ctaBox.left - lightsBox.left,
+        spillReachesHit: lightsBox.left < ctaBox.left - 6,
+        hitsLink: hit !== null && cta.contains(hit),
+      };
+    });
+
+  for (const width of widths) {
+    const label = `${width} px`;
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/');
+    // Hovered, the lights spill their widest: 1.25rem (22.5 px) each side.
+    await atlasLink(page).hover();
+    await expect
+      .poll(async () => (await measure()).spillLeft, { message: label })
+      .toBeCloseTo(22.5, 0);
+    const lit = await measure();
+    expect(lit.pageOverflow, label).toBeLessThanOrEqual(0);
+    expect(lit.innerOverflow, label).toBeLessThanOrEqual(0);
+    expect(lit.clippedBy, label).toEqual([]);
+    expect(lit.pointerEvents, label).toEqual(['none', 'none', 'none', 'none']);
+    expect(lit.spillReachesHit, label).toBe(true);
+    expect(lit.hitsLink, label).toBe(false);
+  }
+});
+
+test('Atlas fills the viewport below the header without page scroll', async ({
+  page,
+}) => {
+  // Reduced motion turns off the header's min-height transition, so the
+  // compact-class check below reads the settled height, not the first frame.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const shell = await page.evaluate(() => {
+    const root = document.documentElement;
+    const explorer = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect();
+    const header = document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect();
+    return {
+      clientHeight: root.clientHeight,
+      explorerBottom: explorer.bottom,
+      explorerTop: explorer.top,
+      headerBottom: header.bottom,
+      innerHeight: window.innerHeight,
+      overscroll: getComputedStyle(root).overscrollBehaviorY,
+      scrollHeight: root.scrollHeight,
+    };
+  });
+  expect(shell.scrollHeight).toBeLessThanOrEqual(shell.clientHeight);
+  expect(
+    Math.abs(shell.explorerBottom - shell.innerHeight),
+  ).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(shell.explorerTop - shell.headerBottom)).toBeLessThanOrEqual(
+    0.5,
+  );
+  expect(shell.overscroll).toBe('none');
+
+  const header = page.locator('[data-site-header]');
+  const before = await header.boundingBox();
+  await header.evaluate((element) =>
+    element.classList.add('site-header--compact'),
+  );
+  const after = await header.boundingBox();
+  expect(after!.height).toBeCloseTo(before!.height, 1);
+
+  await page.goto('/');
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).overscrollBehaviorY,
+    ),
+  ).toBe('auto');
+});
+
+test('Atlas pickers open a gutter below the site header', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'phone pickers are full-screen by CSS');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const headerBottom = await page
+    .locator('[data-site-header]')
+    .evaluate((element) => element.getBoundingClientRect().bottom);
+
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  const catalog = await page
+    .getByRole('dialog', { name: 'Select dataset' })
+    .boundingBox();
+  expect(catalog!.y - headerBottom).toBeGreaterThanOrEqual(7.5);
+  expect(catalog!.y - headerBottom).toBeLessThanOrEqual(18.5);
+  await page.keyboard.press('Escape');
+
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .getByRole('button', { name: 'Choose basemap and terrain' })
+    .click();
+  const earth = await page
+    .getByRole('dialog', { name: 'Basemap and terrain' })
+    .boundingBox();
+  expect(earth!.y - headerBottom).toBeGreaterThanOrEqual(7.5);
+  expect(earth!.y - headerBottom).toBeLessThanOrEqual(10.5);
 });
 
 test('Atlas status shows progress while a replacement dataset stays pending', async ({
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.route('**/g6pd-deficiency.surface.json', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1_800));
-    await route.fallback();
-  });
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  const render = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  const observations = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'observations',
+    Number.POSITIVE_INFINITY,
+  );
 
   await chooseAtlasMap(page, 'g6pd-deficiency');
   const status = page.locator('[data-atlas-status-slot]');
@@ -140,10 +1338,112 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
     'Atlas operation progress',
   );
   await expect(progress).toBeVisible();
+  await expect.poll(() => render.hits()).toBe(1);
+  await expect.poll(() => observations.hits()).toBe(1);
   await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  render.release();
+  observations.release();
   await expect(
     page.locator('[data-atlas-active="g6pd-deficiency"]'),
   ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect
+    .poll(() => displayedArtifactIds(page))
+    .toEqual(['g6pd-deficiency']);
+  expect(render.hits()).toBe(1);
+  expect(observations.hits()).toBe(1);
+});
+
+test('a replacement stays hidden until its render tier arrives, then swaps atomically', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const observationsKey = artifactTierKey(
+    await readInlineCatalog(page),
+    'g6pd-deficiency',
+    'observations',
+  );
+  const render = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.evaluate(() => {
+    const explorer = document.querySelector('.atlas-explorer');
+    if (explorer === null) throw new Error('missing .atlas-explorer');
+    const history: string[] = [];
+    const probe = window as Window & {
+      __atlasDisplayedHistory?: string[];
+      __atlasReleaseMark?: () => void;
+    };
+    probe.__atlasDisplayedHistory = history;
+    probe.__atlasReleaseMark = () => history.push('|release|');
+    new MutationObserver(() =>
+      history.push(explorer.getAttribute('data-atlas-displayed') ?? ''),
+    ).observe(explorer, {
+      attributes: true,
+      attributeFilter: ['data-atlas-displayed'],
+    });
+  });
+  const observationsArrived = page.waitForResponse((response) =>
+    urlMatchesKey(new URL(response.url()), observationsKey),
+  );
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await observationsArrived;
+  await expect.poll(() => render.hits()).toBe(1);
+  await page.waitForTimeout(750);
+  await expect(page.locator('[data-atlas-status-slot]')).toContainText(
+    'G6PD deficiency',
+  );
+  await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  await page.evaluate(() =>
+    (
+      window as Window & { __atlasReleaseMark?: () => void }
+    ).__atlasReleaseMark?.(),
+  );
+  render.release();
+  await expect(
+    page.locator('[data-atlas-active="g6pd-deficiency"]'),
+  ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect
+    .poll(() => displayedArtifactIds(page))
+    .toEqual(['g6pd-deficiency']);
+  const history = await page.evaluate(
+    () =>
+      (window as Window & { __atlasDisplayedHistory?: string[] })
+        .__atlasDisplayedHistory ?? [],
+  );
+  const cut = history.indexOf('|release|');
+  expect(cut).toBeGreaterThanOrEqual(0);
+  const parse = (value: string) =>
+    [...new Set(value.split(/\s+/).filter(Boolean))].sort().join(' ');
+  const before = history.slice(0, cut).map(parse);
+  const after = history.slice(cut + 1).map(parse);
+  // Nothing of G6PD is displayed while its render tier is held.
+  for (const value of before) expect(value).toBe('hbs-rs334');
+  // After the release: hbs-rs334 -> (cross-fade: both)* -> g6pd-deficiency, never back.
+  expect(after.at(-1)).toBe('g6pd-deficiency');
+  const rank = {
+    'g6pd-deficiency': 2,
+    'g6pd-deficiency hbs-rs334': 1,
+    'hbs-rs334': 0,
+  } as const;
+  let last = 0;
+  for (const value of after) {
+    expect(Object.keys(rank)).toContain(value);
+    const step = rank[value as keyof typeof rank];
+    expect(step).toBeGreaterThanOrEqual(last);
+    last = step;
+  }
 });
 
 test('navigation stays visible and condenses after scrolling', async ({
@@ -175,66 +1475,967 @@ test('navigation stays visible and condenses after scrolling', async ({
   expect(navFontSize).toBeGreaterThanOrEqual(16);
 });
 
-test('visible project names use the wordmark typography', async ({ page }) => {
-  for (const route of brandAuditRoutes) {
-    await page.goto(route);
-    const unstyled = await page.evaluate(() => {
-      const failures: string[] = [];
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-      );
-      let node = walker.nextNode();
-      while (node) {
-        if (node.nodeValue?.includes('genomeOS')) {
-          const parent = node.parentElement;
-          const nonVisual = parent?.closest('script, style, title, code, pre');
-          if (
-            parent &&
-            !nonVisual &&
-            getComputedStyle(parent).display !== 'none'
-          ) {
-            const wordmark = parent.closest<HTMLElement>(
-              '.brand-name, .wordmark, .site-title',
-            );
-            if (!wordmark) {
-              failures.push(
-                `${parent.tagName.toLowerCase()}: missing wordmark`,
-              );
-            } else if (
-              !getComputedStyle(wordmark).fontFamily.includes('Raleway')
-            ) {
-              failures.push(`${parent.tagName.toLowerCase()}: wrong font`);
-            }
-          }
-        }
-        node = walker.nextNode();
-      }
-      return failures;
+/**
+ * The FOUNDATION capitals span 41.1 of the header lockup's 300 user units of
+ * height (the brand SVG test below checks that against the artwork).
+ */
+const FOUNDATION_SHARE = 41.11 / 300;
+
+async function measureHeaderLogo(page: Page) {
+  return page.evaluate(() => {
+    const img = document.querySelector<HTMLImageElement>('.wordmark__logo')!;
+    const box = img.getBoundingClientRect();
+    const header = document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect();
+    return {
+      headerHeight: header.height,
+      height: box.height,
+      naturalHeight: img.naturalHeight,
+      naturalWidth: img.naturalWidth,
+      width: box.width,
+    };
+  });
+}
+
+test('the header home link is the FOUNDATION lockup, large at the top of the page', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/');
+  const home = page
+    .locator('.site-header')
+    .getByRole('link', { name: 'genomeOS Foundation', exact: true });
+  await expect(home).toHaveAttribute('href', '/');
+  const logo = home.getByRole('img', {
+    name: 'genomeOS Foundation',
+    exact: true,
+  });
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveJSProperty('complete', true);
+  await expect(logo).not.toHaveAttribute('loading', 'lazy');
+  await expect(logo).toHaveAttribute('src', '/brand/genomeos-lockup-dark.svg');
+  await expect(logo).toHaveAttribute('width', '1395');
+  await expect(logo).toHaveAttribute('height', '300');
+
+  const landing = await measureHeaderLogo(page);
+  expect(landing.naturalWidth).toBeGreaterThan(0);
+  expect(landing.width / landing.height).toBeCloseTo(
+    landing.naturalWidth / landing.naturalHeight,
+    1,
+  );
+  if (isMobile) {
+    // Pixel 7 (412 px): the width left beside genomeOS Atlas and Menu.
+    expect(landing.height).toBeGreaterThanOrEqual(40);
+    expect(landing.height).toBeLessThanOrEqual(50);
+    expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(5);
+    expect(landing.headerHeight).toBeCloseTo(86.5, 0);
+  } else {
+    // 3.6rem (64.8 px) in a 5.5rem bar: FOUNDATION capitals at ~8.9 px.
+    expect(landing.height).toBeGreaterThanOrEqual(62);
+    expect(landing.height).toBeLessThanOrEqual(68);
+    expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(7);
+    expect(landing.headerHeight).toBeCloseTo(100, 0);
+
+    // The taller bar keeps the nav links on its vertical centre line.
+    const centres = await page.evaluate(() => {
+      const middle = (element: Element) => {
+        const box = element.getBoundingClientRect();
+        return box.top + box.height / 2;
+      };
+      return {
+        bar: middle(document.querySelector('.site-header__inner')!),
+        links: [
+          ...document.querySelectorAll('nav.desktop-nav a, .launch-atlas-cta'),
+        ].map(middle),
+        logo: middle(document.querySelector('.wordmark__logo')!),
+      };
     });
-    expect(unstyled, `${route} has unstyled genomeOS text`).toEqual([]);
+    for (const centre of [centres.logo, ...centres.links])
+      expect(Math.abs(centre - centres.bar)).toBeLessThanOrEqual(1);
   }
 });
 
-test('project page labels all three capability states', async ({ page }) => {
-  await page.goto('/project/');
-  await expect(
-    page.getByRole('heading', { name: 'Available now' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'In active development' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Future exploration' }),
-  ).toBeVisible();
+// Home, and a page whose scroll anchoring used to pull scrollTo(400) to 399.
+for (const route of ['/', '/contribute/']) {
+  test(`the lockup shrinks with the compact bar and the page stays put (${route})`, async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto(route);
+    const header = page.locator('[data-site-header]');
+    const landing = await measureHeaderLogo(page);
+    const layout = () =>
+      page.evaluate(() => {
+        const left = (selector: string) => {
+          const element = document.querySelector(selector)!;
+          // A display:none desktop nav (phones) has no box to compare.
+          return element.getClientRects().length > 0
+            ? element.getBoundingClientRect().left
+            : null;
+        };
+        return {
+          actionsLeft: left('.site-header__actions'),
+          headerBottom: document
+            .querySelector('[data-site-header]')!
+            .getBoundingClientRect().bottom,
+          mainTop:
+            document.querySelector('main')!.getBoundingClientRect().top +
+            window.scrollY,
+          navLeft: left('.site-header__inner > nav.desktop-nav'),
+          scrollHeight: document.documentElement.scrollHeight,
+        };
+      });
+    const before = await layout();
+    // At the top of the page the bar ends where the page begins.
+    expect(Math.abs(before.headerBottom - before.mainTop)).toBeLessThanOrEqual(
+      0.5,
+    );
+    expect(before.actionsLeft).not.toBeNull();
+    expect(before.navLeft === null).toBe(Boolean(isMobile));
+
+    // html has scroll-behavior: smooth; jump straight there.
+    await page.evaluate(() =>
+      window.scrollTo({ top: 400, behavior: 'instant' }),
+    );
+    await expect(header).toHaveClass(/site-header--compact/);
+    // Both transitions are 200 ms; wait for the bar and the logo to settle.
+    await expect(async () => {
+      const compact = await measureHeaderLogo(page);
+      expect(compact.headerHeight).toBeCloseTo(71.2, 0);
+      expect(compact.height).toBeCloseTo(isMobile ? 42.1 : 46.8, 0);
+    }).toPass({ timeout: 5_000 });
+
+    const compact = await measureHeaderLogo(page);
+    expect(compact.height).toBeLessThan(landing.height * 0.95);
+    expect(compact.height).toBeLessThan(compact.headerHeight - 16);
+    expect(await page.evaluate(() => window.scrollY)).toBe(400);
+    // The header is fixed over a spacer of its landing height, so nothing
+    // below it moves, and the nav and actions beside the logo stay put.
+    const after = await layout();
+    expect(after.mainTop).toBe(before.mainTop);
+    expect(after.scrollHeight).toBe(before.scrollHeight);
+    expect(after.actionsLeft).toBe(before.actionsLeft);
+    expect(after.navLeft).toBe(before.navLeft);
+
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(header).not.toHaveClass(/site-header--compact/);
+    await expect
+      .poll(async () => (await measureHeaderLogo(page)).height)
+      .toBeCloseTo(landing.height, 0);
+  });
+}
+
+// Home, and pages where, on phones, scroll anchoring used to correct scrollY
+// by a pixel and flip the header back.
+for (const route of ['/', '/projects/', '/contribute/']) {
+  test(`the header settles in one state while scrolling slowly across the threshold (${route})`, async ({
+    page,
+  }) => {
+    await page.goto(route);
+    await page.evaluate(() => {
+      const header = document.querySelector('[data-site-header]')!;
+      const record = window as unknown as {
+        headerFlips: boolean[];
+        scrollPositions: number[];
+      };
+      record.headerFlips = [];
+      record.scrollPositions = [];
+      new MutationObserver(() =>
+        record.headerFlips.push(
+          header.classList.contains('site-header--compact'),
+        ),
+      ).observe(header, { attributeFilter: ['class'] });
+      window.addEventListener(
+        'scroll',
+        () => record.scrollPositions.push(window.scrollY),
+        { passive: true },
+      );
+    });
+
+    // 2 px steps from 36 to 60 and back (instant, not html's smooth
+    // scrolling), across both lines (compact above 56, expand below 40), each
+    // held longer than a whole transition, so a resize that moved scrollY
+    // would show up. A single threshold in between also flips exactly twice
+    // here; the next test pins the band between the two lines.
+    const steps = Array.from({ length: 13 }, (_, index) => 36 + 2 * index);
+    for (const top of [...steps, ...[...steps].reverse()]) {
+      await page.evaluate(
+        (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+        top,
+      );
+      await page.waitForTimeout(240);
+    }
+
+    const record = await page.evaluate(() => {
+      const { headerFlips, scrollPositions } = window as unknown as {
+        headerFlips: boolean[];
+        scrollPositions: number[];
+      };
+      return { headerFlips, scrollPositions };
+    });
+    expect(record.headerFlips).toEqual([true, false]);
+    // Only the positions scrolled to: no scroll-anchoring correction.
+    const unrequested = record.scrollPositions.filter(
+      (y) => !steps.some((step) => Math.abs(step - y) < 0.5),
+    );
+    expect(unrequested).toEqual([]);
+  });
+}
+
+test('between the two scroll lines the header keeps the state it had', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const header = page.locator('[data-site-header]');
+  /** Scrolls instantly, then waits out the scroll event and the header's frame. */
+  const scrollTo = (top: number) =>
+    page.evaluate(
+      (y) =>
+        new Promise<boolean>((resolve) => {
+          window.scrollTo({ top: y, behavior: 'instant' });
+          let frames = 0;
+          const tick = () => {
+            frames += 1;
+            if (frames < 4) requestAnimationFrame(tick);
+            else
+              resolve(
+                document
+                  .querySelector('[data-site-header]')!
+                  .classList.contains('site-header--compact'),
+              );
+          };
+          requestAnimationFrame(tick);
+        }),
+      top,
+    );
+
+  // From the top, inside the band (40 to 56): still the landing bar.
+  expect(await scrollTo(50)).toBe(false);
+  expect(await scrollTo(56)).toBe(false);
+  // Past the upper line it compacts...
+  expect(await scrollTo(60)).toBe(true);
+  // ...and back inside the band it stays compact...
+  expect(await scrollTo(48)).toBe(true);
+  expect(await scrollTo(40)).toBe(true);
+  // ...until it crosses the lower line.
+  expect(await scrollTo(36)).toBe(false);
+  await expect(header).not.toHaveClass(/site-header--compact/);
 });
 
-test('working-group page links each group to issue work', async ({ page }) => {
-  await page.goto('/working-groups/');
-  await expect(
-    page.getByRole('link', { name: 'Browse matching issues' }),
-  ).toHaveCount(3);
-  await expect(page.getByText('Group forming')).toHaveCount(3);
+/** The target's top and the fixed header's bottom, in viewport pixels. */
+const clearanceBelowHeader = (target: Locator) =>
+  target.evaluate((element) => ({
+    headerBottom: document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect().bottom,
+    top: element.getBoundingClientRect().top,
+  }));
+
+test('linked sections land below the fixed header, not under it', async ({
+  page,
+}) => {
+  // Shared links to section headings, opened fresh, at the reported sizes:
+  // without scroll padding each heading ended at the viewport top, 71 px of
+  // it under the compact bar.
+  for (const [route, id, width, height] of [
+    ['/projects/', 'safeguards-title', 1440, 900],
+    ['/', 'join-title', 390, 844],
+    ['/projects/', 'pipeline-title', 844, 390],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto(`${route}#${id}`);
+    await expect(page.locator('[data-site-header]')).toHaveClass(
+      /site-header--compact/,
+    );
+    // The bar's 200 ms resize and any reveal under the target settle first.
+    await page.waitForTimeout(1_000);
+    const { headerBottom, top } = await clearanceBelowHeader(
+      page.locator(`#${id}`),
+    );
+    expect(top, `${route}#${id} at ${width}x${height}`).toBeGreaterThanOrEqual(
+      headerBottom - 0.5,
+    );
+  }
+
+  // The skip link's target starts right below the landing bar's spacer, so
+  // following it leaves the page at the top with nothing under the bar.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/contribute/');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#main-content$/);
+  await page.waitForTimeout(1_000);
+  const main = await clearanceBelowHeader(page.locator('#main-content'));
+  expect(main.top).toBeGreaterThanOrEqual(main.headerBottom - 0.5);
+});
+
+test('keyboard focus moving back up the page stays clear of the fixed header', async ({
+  page,
+}) => {
+  // Instant scrolling and an instant header, so each focus step settles at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 844, height: 390 });
+  for (const route of ['/404.html', '/contribute/']) {
+    await page.goto(route);
+    await page.locator('.site-footer a').last().focus();
+    const hidden: string[] = [];
+    // Shift+Tab back through main until focus reaches the header.
+    for (let step = 0; step < 40; step += 1) {
+      await page.keyboard.press('Shift+Tab');
+      const focused = await page.evaluate(() => {
+        const element = document.activeElement!;
+        const header = document.querySelector('[data-site-header]')!;
+        return {
+          headerBottom: header.getBoundingClientRect().bottom,
+          inHeader: header.contains(element),
+          inMain: element.closest('main') !== null,
+          label: (element.textContent ?? '').trim().slice(0, 40),
+          top: element.getBoundingClientRect().top,
+        };
+      });
+      if (focused.inHeader) break;
+      if (focused.inMain && focused.top < focused.headerBottom - 0.5)
+        hidden.push(`${focused.label} (top ${Math.round(focused.top)})`);
+    }
+    expect(hidden, route).toEqual([]);
+  }
+});
+
+test(
+  'the header shrinks the lockup instead of wrapping the nav at narrow desktop widths',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // Media queries count rem at 16 px, not the 112.5% root. 737 px: the first
+    // width above the phone layout (46rem). 1025 px: the first above 64rem,
+    // where the desktop nav used to start. 1152 px: the last Menu width
+    // (72rem). 1153 px: the first desktop-nav width, the tightest row.
+    // 1280 px: a common laptop width. 1392 and 1393 px: the last width with
+    // the narrower genomeOS Atlas (87rem) and the first with the full one.
+    const desktopNavFrom = 1153;
+    for (const width of [737, 1025, 1152, 1153, 1280, 1392, 1393]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/projects/');
+      const row = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const shown = (selector: string) =>
+          document.querySelector(selector)!.getClientRects().length > 0;
+        const links = [...document.querySelectorAll('nav.desktop-nav a')];
+        return {
+          clientWidth: inner.clientWidth,
+          desktopNav: shown('.site-header__inner > nav.desktop-nav'),
+          linkHeights: links
+            .filter((link) => link.getClientRects().length > 0)
+            .map((link) => link.getBoundingClientRect().height),
+          menu: shown('.mobile-nav summary'),
+          scrollWidth: inner.scrollWidth,
+        };
+      });
+      expect(row.desktopNav, `${width}`).toBe(width >= desktopNavFrom);
+      expect(row.menu, `${width}`).toBe(width < desktopNavFrom);
+      expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
+      // One line each: a wrapped label would be ~2x the 1rem line height.
+      for (const height of row.linkHeights)
+        expect(height, `${width}`).toBeLessThan(36);
+      const landing = await measureHeaderLogo(page);
+      expect(
+        landing.height * FOUNDATION_SHARE,
+        `${width}`,
+      ).toBeGreaterThanOrEqual(7);
+
+      // The landing lockup is still the larger one, so scrolling shrinks it.
+      await page.evaluate(() =>
+        window.scrollTo({ top: 400, behavior: 'instant' }),
+      );
+      await expect(async () => {
+        const compact = await measureHeaderLogo(page);
+        expect(compact.headerHeight, `${width}`).toBeCloseTo(71.2, 0);
+        expect(compact.height, `${width}`).toBeCloseTo(46.8, 0);
+      }).toPass({ timeout: 5_000 });
+      expect(landing.height, `${width}`).toBeGreaterThan(46.8 * 1.1);
+    }
+  },
+);
+
+test(
+  'the Atlas header shows the Menu up to 72rem too, so its nav labels never wrap',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // With the desktop nav from 1025 px, the wider Atlas SVG wordmark wrapped
+    // "Working groups" and "Technical docs" onto two lines up to 1058 px.
+    await page.setViewportSize({ width: 1025, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const desktopNavFrom = 1153;
+    for (const width of [1025, 1058, 1152, 1153, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const row = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const shown = (selector: string) =>
+          document.querySelector(selector)!.getClientRects().length > 0;
+        return {
+          clientWidth: inner.clientWidth,
+          desktopNav: shown('.site-header__inner > nav.desktop-nav'),
+          linkHeights: [...document.querySelectorAll('nav.desktop-nav a')]
+            .filter((link) => link.getClientRects().length > 0)
+            .map((link) => link.getBoundingClientRect().height),
+          menu: shown('.mobile-nav summary'),
+          scrollWidth: inner.scrollWidth,
+        };
+      });
+      expect(row.desktopNav, `${width}`).toBe(width >= desktopNavFrom);
+      expect(row.menu, `${width}`).toBe(width < desktopNavFrom);
+      expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
+      for (const height of row.linkHeights)
+        expect(height, `${width}`).toBeLessThan(36);
+    }
+  },
+);
+
+test(
+  'the Atlas nav keeps its labels on one line, GitHub level with them, while the status chip loads',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // Hold the default map's surface, so the chip keeps its loading copy, a
+    // label over its detail line beside its progress meter. With GitHub in the
+    // nav, Working groups and Technical docs wrapped beside it up to 1259 px,
+    // and GitHub sat 14.8 px below Technical docs' first line. The e2e build
+    // stretches the request stall window to 120 s, so the held tier never
+    // times out while a loaded machine measures the row.
+    // The chip reads "Loading HbS (rs334)" until the globe starts drawing the
+    // map, then "Rendering HbS (rs334)" over "Building measured points" while
+    // the surface is still on its way; the download's progress and the
+    // drawing's share one activity, so either can be the copy showing.
+    const loading = /^(Loading|Rendering) HbS \(rs334\)/;
+    const render = await delayArtifactTier(
+      page,
+      'hbs-rs334',
+      'render',
+      Number.POSITIVE_INFINITY,
+    );
+    await page.setViewportSize({ width: 1153, height: 800 });
+    await page.goto('/app/');
+    const chip = page.locator('.atlas-navbar-status-slot .atlas-status');
+    await expect(chip).toContainText(loading);
+    await expect(chip.locator('small')).toHaveText(/\S/);
+    await expect(chip.getByRole('progressbar')).toBeVisible();
+    await expect.poll(() => render.hits()).toBe(1);
+    await page.evaluate(() => document.fonts.ready);
+
+    for (const width of [1153, 1160, 1200, 1240, 1259, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const label = `${width} px`;
+      const row = await page.evaluate(() => {
+        const nav = document.querySelector('nav.desktop-nav')!;
+        const textBox = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const lines = new Set(
+            [...range.getClientRects()].map(({ top }) => Math.round(top)),
+          );
+          const { top, bottom } = range.getBoundingClientRect();
+          return { bottom, lines: lines.size, top };
+        };
+        const links = [...nav.querySelectorAll('a')];
+        // GitHub's text sits level with the link before it, Contact.
+        const contact = links.find(
+          (link) => link.textContent!.trim() === 'Contact',
+        )!;
+        const inner = document.querySelector('.site-header__inner')!;
+        return {
+          contact: textBox(contact),
+          github: textBox(nav.querySelector('.github-link span')!),
+          // GitHub's text is its <span>, beside the icon.
+          lines: links.map(
+            (link) => textBox(link.querySelector('span') ?? link).lines,
+          ),
+          overflow: inner.scrollWidth - inner.clientWidth,
+        };
+      });
+      expect(row.lines, label).toEqual([1, 1, 1, 1, 1]);
+      for (const edge of ['top', 'bottom'] as const)
+        expect(
+          Math.abs(row.github[edge] - row.contact[edge]),
+          `${label}: text ${edge}`,
+        ).toBeLessThanOrEqual(0.5);
+      expect(row.overflow, label).toBeLessThanOrEqual(0);
+      // The chip's copy gives way instead, and still reads as loading.
+      await expect(chip, label).toContainText(loading);
+      await expect(chip.locator('small'), label).toHaveText(/\S/);
+      await expect(chip, label).toBeVisible();
+    }
+    // Still the held load: one request, and the map not ready.
+    expect(render.hits()).toBe(1);
+    await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+      'data-atlas-ready',
+      'false',
+    );
+    render.release();
+  },
+);
+
+test('the Atlas header keeps the wordmark crop at its previous size', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const header = page.locator('[data-site-header]');
+  await expect(header).not.toHaveClass(/site-header--lockup/);
+  const logo = header
+    .getByRole('link', { name: 'genomeOS', exact: true })
+    .getByRole('img', { name: 'genomeOS', exact: true });
+  await expect(logo).toHaveAttribute(
+    'src',
+    '/brand/genomeos-wordmark-dark.svg',
+  );
+  // 1.6rem on desktop and 0.96rem in the phone header (atlas.css), in the
+  // unchanged 4.75rem bar.
+  await expect(async () => {
+    const measured = await measureHeaderLogo(page);
+    expect(measured.height).toBeCloseTo(isMobile ? 17.28 : 28.8, 0);
+    expect(measured.headerHeight).toBeCloseTo(86.5, 0);
+  }).toPass({ timeout: 5_000 });
+});
+
+test('the footer shows the full logo with a legible tagline', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const lockup = page
+    .locator('.site-footer')
+    .getByRole('img', { name: /^genomeOS Foundation.*benefit of all$/ });
+  await lockup.scrollIntoViewIfNeeded();
+  await expect(lockup).toBeVisible();
+  await expect
+    .poll(() => lockup.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  // The tagline's glyphs span 43.2 of the artwork's 435 user units of height.
+  const taglinePx = await lockup.evaluate(
+    (img) => (img.getBoundingClientRect().height * 43.23) / 435,
+  );
+  expect(taglinePx).toBeGreaterThanOrEqual(10);
+});
+
+// Design critique 3, m-5: at 320 px "Contact" stood alone above "Privacy · Cookie settings", and
+// the docs footer's three links made a small pyramid.
+test('at 320 px the footer links stack in one column, never one above two', async ({
+  page,
+}) => {
+  for (const [route, row, edge] of [
+    ['/', '.site-footer__links-row', 'left'],
+    ['/docs/system-overview/', '.docs-site-links', 'centre'],
+  ] as const)
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 700 });
+      await page.goto(route);
+      const links = await page.locator(row).evaluate((element) =>
+        [...element.querySelectorAll('a, button')].map((link) => {
+          const box = link.getBoundingClientRect();
+          return {
+            name: link.textContent!.trim(),
+            top: box.top,
+            bottom: box.bottom,
+            left: box.left,
+            centre: box.left + box.width / 2,
+          };
+        }),
+      );
+      const label = `${route} at ${width} px`;
+      expect(
+        links.map(({ name }) => name),
+        label,
+      ).toEqual(['Contact', 'Privacy', 'Cookie settings']);
+      links.slice(1).forEach((link, index) => {
+        const above = links[index];
+        if (width === 390) {
+          // Room for one row: they keep it.
+          expect(Math.abs(link.top - above.top), label).toBeLessThan(1);
+          return;
+        }
+        expect(link.top, `${label}: ${link.name}`).toBeGreaterThanOrEqual(
+          above.bottom - 0.5,
+        );
+        expect(
+          Math.abs(link[edge] - above[edge]),
+          `${label}: ${link.name}`,
+        ).toBeLessThan(1);
+      });
+      // Contact is not a policy: it stays outside the Site policies nav.
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Site policies' })
+          .getByRole('link', { name: 'Contact' }),
+        label,
+      ).toHaveCount(0);
+    }
+});
+
+test(
+  'brand SVGs are served and the header crops frame their glyphs',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    const svgs = new Map<string, string>();
+    for (const name of [
+      'genomeos-wordmark-dark.svg',
+      'genomeos-lockup-dark.svg',
+      'genomeos-foundation-dark.svg',
+    ]) {
+      const response = await request.get(`/brand/${name}`);
+      expect(response.status(), name).toBe(200);
+      expect(response.headers()['content-type'], name).toContain(
+        'image/svg+xml',
+      );
+      svgs.set(name, await response.text());
+    }
+
+    await page.setContent(
+      svgs.get('genomeos-wordmark-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const frame = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const box = (id: string) =>
+        document.querySelector<SVGGraphicsElement>(`#${id}`)!.getBBox();
+      const genome = box('wordmark-genome');
+      const os = box('wordmark-os');
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        bottom: y + height,
+        foundationTop: box('foundation-line').y,
+        height,
+        left: x,
+        right: x + width,
+        top: y,
+        width,
+        wordmark: {
+          bottom: Math.max(genome.y + genome.height, os.y + os.height),
+          left: Math.min(genome.x, os.x),
+          right: Math.max(genome.x + genome.width, os.x + os.width),
+          top: Math.min(genome.y, os.y),
+        },
+      };
+    });
+    // At least 1% of clear space on every side, so no glyph edge is clipped,
+    // and the FOUNDATION line below the wordmark stays out of the frame.
+    expect(frame.wordmark.left - frame.left).toBeGreaterThan(
+      0.01 * frame.width,
+    );
+    expect(frame.right - frame.wordmark.right).toBeGreaterThan(
+      0.01 * frame.width,
+    );
+    expect(frame.wordmark.top - frame.top).toBeGreaterThan(0.01 * frame.height);
+    expect(frame.bottom - frame.wordmark.bottom).toBeGreaterThan(
+      0.01 * frame.height,
+    );
+    expect(frame.foundationTop).toBeGreaterThan(frame.bottom);
+
+    // The lockup crop adds the FOUNDATION line and leaves out the tagline.
+    await page.setContent(
+      svgs.get('genomeos-foundation-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const taglineTop = await page.evaluate(
+      () => document.querySelector<SVGGraphicsElement>('#tagline')!.getBBox().y,
+    );
+    await page.setContent(
+      svgs.get('genomeos-lockup-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const lockup = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const boxes = ['wordmark-genome', 'wordmark-os', 'foundation-line'].map(
+        (id) => document.querySelector<SVGGraphicsElement>(`#${id}`)!.getBBox(),
+      );
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        bottom: y + height,
+        foundationHeight: boxes[2].height,
+        glyphs: {
+          bottom: Math.max(...boxes.map((box) => box.y + box.height)),
+          left: Math.min(...boxes.map((box) => box.x)),
+          right: Math.max(...boxes.map((box) => box.x + box.width)),
+          top: Math.min(...boxes.map((box) => box.y)),
+        },
+        hasTagline: document.querySelector('#tagline') !== null,
+        height,
+        left: x,
+        right: x + width,
+        top: y,
+        width,
+      };
+    });
+    expect(lockup.glyphs.left - lockup.left).toBeGreaterThan(
+      0.01 * lockup.width,
+    );
+    expect(lockup.right - lockup.glyphs.right).toBeGreaterThan(
+      0.01 * lockup.width,
+    );
+    expect(lockup.glyphs.top - lockup.top).toBeGreaterThan(
+      0.01 * lockup.height,
+    );
+    expect(lockup.bottom - lockup.glyphs.bottom).toBeGreaterThan(
+      0.01 * lockup.height,
+    );
+    expect(lockup.hasTagline).toBe(false);
+    expect(taglineTop).toBeGreaterThan(lockup.bottom);
+    // FOUNDATION_SHARE, which the header size checks rely on.
+    expect(lockup.foundationHeight / lockup.height).toBeCloseTo(
+      FOUNDATION_SHARE,
+      3,
+    );
+  },
+);
+
+test(
+  'every page declares the favicon set and the files are served',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    const served = new Map<string, RegExp>([
+      ['/favicon.svg', /^image\/svg\+xml/],
+      ['/favicon-32.png', /^image\/png/],
+      ['/favicon-16.png', /^image\/png/],
+      ['/apple-touch-icon.png', /^image\/png/],
+    ]);
+    // SiteLayout pages, the Atlas, the standalone polygon page (opened in its
+    // own tab from the inspector) and Starlight docs build their heads separately.
+    for (const route of [
+      '/',
+      '/app/',
+      '/app/polygon/',
+      '/docs/',
+      '/docs/system-overview/',
+    ]) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      const icons = await page
+        .locator('link[rel~="icon"], link[rel="apple-touch-icon"]')
+        .evaluateAll((links) =>
+          (links as HTMLLinkElement[]).map((link) => ({
+            href: new URL(link.href).pathname,
+            type: link.type,
+          })),
+        );
+      expect(
+        icons.filter(({ type }) => type === 'image/svg+xml'),
+        route,
+      ).toEqual([{ href: '/favicon.svg', type: 'image/svg+xml' }]);
+      expect(icons.map(({ href }) => href).sort(), route).toEqual(
+        [...served.keys()].sort(),
+      );
+    }
+
+    served.set('/favicon.ico', /^image\/(x-icon|vnd\.microsoft\.icon)/);
+    for (const [href, type] of served) {
+      const response = await request.get(href);
+      expect(response.status(), href).toBe(200);
+      expect(response.headers()['content-type'], href).toMatch(type);
+    }
+  },
+);
+
+test(
+  'the favicon frames the globe O on a dark circle, and its PNGs render the shipped SVG',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.goto('/favicon.svg');
+    const frame = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      // The O is approximately the left square of the OS group: its side is
+      // taken as the group's height, which comes from the S (about 3.8 units
+      // lower than the O).
+      const os = document
+        .querySelector<SVGGraphicsElement>('#wordmark-os')!
+        .getBBox();
+      const circle = (selector: string) => {
+        const { cx, cy, r } =
+          document.querySelector<SVGCircleElement>(selector)!;
+        return [cx, cy, r].map((length) => length.baseVal.value);
+      };
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        view: [x + width / 2, y + height / 2, width / 2],
+        square: width === height,
+        globe: [os.x + os.height / 2, os.y + os.height / 2, os.height / 2],
+        clip: circle('clipPath circle'),
+        backing: circle('#favicon-backing'),
+      };
+    });
+    expect(frame.square).toBe(true);
+    const [cx, cy, radius] = frame.globe;
+    // The clip just clears the O's rim and cuts away the S; the backing is
+    // 1.12 times the O's radius and exactly fills the square viewBox.
+    for (const [actual, expected] of [
+      [frame.view, [cx, cy, radius * 1.12]],
+      [frame.backing, [cx, cy, radius * 1.12]],
+      [frame.clip, [cx, cy, radius + 1.5]],
+    ]) {
+      actual.forEach((value, index) =>
+        expect(value).toBeCloseTo(expected[index], 2),
+      );
+    }
+
+    /** RGBA bytes of a same-origin image drawn at `size` x `size`. */
+    const pixels = (href: string, size: number) =>
+      page.evaluate(
+        async ([href, size]) => {
+          const image = new Image();
+          image.src = href;
+          await image.decode();
+          const canvas = document.createElementNS(
+            'http://www.w3.org/1999/xhtml',
+            'canvas',
+          ) as HTMLCanvasElement;
+          canvas.width = size;
+          canvas.height = size;
+          const context = canvas.getContext('2d')!;
+          context.drawImage(image, 0, 0, size, size);
+          return [...context.getImageData(0, 0, size, size).data];
+        },
+        [href, size] as const,
+      );
+    const pixel = (data: number[], size: number, x: number, y: number) =>
+      data.slice(4 * (y * size + x), 4 * (y * size + x) + 4);
+    const ground = [2, 7, 18, 255]; // header ground #020712, the backing colour
+    /** Columns spanned by the O: opaque pixels that are not the ground. */
+    const drawnShare = (data: number[], size: number) => {
+      let minX = size;
+      let maxX = -1;
+      for (let index = 0; index < data.length; index += 4) {
+        const differs = [0, 1, 2].some(
+          (channel) => Math.abs(data[index + channel] - ground[channel]) > 8,
+        );
+        if (data[index + 3] < 128 || !differs) continue;
+        const x = (index / 4) % size;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+      return (maxX - minX + 1) / size;
+    };
+
+    const tab = await pixels('/favicon-48.png', 48);
+    expect(pixel(tab, 48, 0, 0)[3]).toBe(0); // outside the round backing
+    expect(pixel(tab, 48, 0, 8)[3]).toBe(0); // still outside, by the rim
+    expect(pixel(tab, 48, 1, 24)).toEqual(ground); // the backing's rim, left
+    expect(pixel(tab, 48, 46, 24)).toEqual(ground); // and right, where S was
+    expect(drawnShare(tab, 48)).toBeGreaterThan(0.86);
+    expect(drawnShare(tab, 48)).toBeLessThan(0.93);
+
+    const apple = await pixels('/apple-touch-icon.png', 180);
+    expect(pixel(apple, 180, 0, 0)).toEqual(ground);
+    expect(drawnShare(apple, 180)).toBeGreaterThan(0.66);
+    expect(drawnShare(apple, 180)).toBeLessThan(0.74);
+
+    // The rasters are renderings of the favicon.svg being served, not stale
+    // copies. Chromium's drawing of the SVG matches each PNG exactly where they
+    // were built; 16 levels per channel leaves room for another platform's
+    // anti-aliasing, while a stale PNG is off by up to 255. Channels are
+    // premultiplied, so colour under zero alpha does not count.
+    const premultiplied = (data: number[]) =>
+      data.map((value, index) =>
+        index % 4 === 3 ? value : (value * data[index - (index % 4) + 3]) / 255,
+      );
+    for (const size of [16, 32, 48]) {
+      const svg = premultiplied(await pixels('/favicon.svg', size));
+      const png = premultiplied(await pixels(`/favicon-${size}.png`, size));
+      const worst = Math.max(
+        ...svg.map((value, index) => Math.abs(value - png[index])),
+      );
+      expect(worst, `favicon-${size}.png against favicon.svg`).toBeLessThan(16);
+    }
+  },
+);
+
+/**
+ * Runs in the page: each shown "genomeOS" text node under `selector` must sit
+ * in a wordmark (`.brand-name`, or Starlight's `.site-title`) set in Raleway.
+ */
+function auditBrandText(selector: string): {
+  checked: number;
+  failures: string[];
+} {
+  const failures: string[] = [];
+  let checked = 0;
+  for (const root of document.querySelectorAll(selector)) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      if (node.nodeValue?.includes('genomeOS')) {
+        const parent = node.parentElement;
+        const nonVisual = parent?.closest('script, style, title, code, pre');
+        if (
+          parent &&
+          !nonVisual &&
+          getComputedStyle(parent).display !== 'none'
+        ) {
+          checked += 1;
+          // The header wordmark is the logo image, so it has no text node.
+          const wordmark = parent.closest<HTMLElement>(
+            '.brand-name, .site-title',
+          );
+          // The GitHub mock on Contribute shows the repository's name as GitHub sets it: in
+          // .brand-name, in the mock's own type (round 2 spec §4.3.4).
+          const githubMock = wordmark?.closest('[data-graphic="work-board"]');
+          if (!wordmark) {
+            failures.push(`${parent.tagName.toLowerCase()}: missing wordmark`);
+          } else if (
+            !githubMock &&
+            !getComputedStyle(wordmark).fontFamily.includes('Raleway')
+          ) {
+            failures.push(`${parent.tagName.toLowerCase()}: wrong font`);
+          }
+        }
+      }
+      node = walker.nextNode();
+    }
+  }
+  return { checked, failures };
+}
+
+test('visible project names use the wordmark typography', async ({ page }) => {
+  for (const route of brandAuditRoutes) {
+    await page.goto(route);
+    // The explorer mounts its controls, the basemap picker among them, after
+    // the load event: audit the mounted explorer, not the page before it.
+    if (route === '/app/')
+      await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+        timeout: 45_000,
+      });
+    const { failures } = await page.evaluate(auditBrandText, 'body');
+    expect(failures, `${route} has unstyled genomeOS text`).toEqual([]);
+  }
+});
+
+test('the basemap picker sets genomeOS basemap names in the wordmark', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expandExplorerSheet(page);
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  // The default basemap is genomeOS Dark; the button's name stays plain text.
+  const trigger = page.getByRole('button', {
+    name: 'Choose basemap and terrain',
+  });
+  await expect(trigger.locator('strong')).toHaveText('genomeOS Dark');
+  await expect(trigger.locator('strong .brand-name')).toHaveText('genomeOS');
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Basemap and terrain' });
+  // Focusing an option shows its detail at once and drops a pending hover.
+  await dialog.getByRole('radio', { name: 'genomeOS Dark basemap' }).focus();
+  await expect(dialog.getByRole('tooltip').locator('strong')).toHaveText(
+    'genomeOS Dark',
+  );
+  // The trigger label, the detail title, the group heading and the option.
+  expect(
+    await page.evaluate(
+      auditBrandText,
+      '.atlas-earth-style__trigger, .atlas-earth-picker',
+    ),
+  ).toEqual({ checked: 4, failures: [] });
 });
 
 test('mobile navigation is a keyboard-operable disclosure', async ({
@@ -252,26 +2453,444 @@ test('mobile navigation is a keyboard-operable disclosure', async ({
   await expect(
     page.getByRole('navigation', { name: 'Mobile navigation' }),
   ).toBeVisible();
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Mobile navigation' })
-      .getByRole('link', { name: 'Technical docs' }),
-  ).toBeVisible();
+  const mobile = page.getByRole('navigation', { name: 'Mobile navigation' });
+  await expect(mobile.getByRole('link', { name: 'Docs' })).toBeVisible();
+  await expect(mobile.getByRole('link', { name: 'Contact' })).toBeVisible();
+  expect(
+    await mobile
+      .getByRole('link')
+      .evaluateAll((links) =>
+        links.map(
+          (link) => link.getAttribute('aria-label') ?? link.textContent!.trim(),
+        ),
+      ),
+  ).toEqual([
+    'Projects',
+    'Contribute',
+    'Docs',
+    'Contact',
+    'View genomeOS on GitHub',
+  ]);
 });
 
-test('404 page offers three recovery routes', async ({ page }) => {
-  await page.goto('/404.html');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'That route is outside the atlas.',
+// WCAG 2.5.8 asks 24 px, and the site's touch targets are 44 px; the Menu's links were 23 px
+// tall (design critique 3). Padding makes the target, so the Menu looks as it did.
+test('every Menu link is a 44 px target on a phone, at 390 and 320 px', async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [390, 844],
+    [320, 640],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    // /contact/ marks its own link as the current page.
+    for (const route of ['/', '/contact/']) {
+      await page.goto(route);
+      await page.locator('.mobile-nav summary').click();
+      const links = page
+        .getByRole('navigation', { name: 'Mobile navigation' })
+        .getByRole('link');
+      // Project, Contribute, Docs, Contact and GitHub.
+      await expect(links).toHaveCount(5);
+      const boxes = await links.evaluateAll((all) =>
+        all.map((link) => {
+          const box = link.getBoundingClientRect();
+          return {
+            name: link.textContent!.trim(),
+            top: box.top,
+            bottom: box.bottom,
+          };
+        }),
+      );
+      boxes.forEach(({ name, top, bottom }, index) => {
+        const label = `${name} at ${width} px on ${route}`;
+        expect(bottom - top, label).toBeGreaterThanOrEqual(44);
+        // Side by side in the list, never overlapping.
+        if (index > 0)
+          expect(top, label).toBeGreaterThanOrEqual(
+            boxes[index - 1].bottom - 0.5,
+          );
+      });
+    }
+  }
+});
+
+test('the Menu panel scrolls inside short viewports and closes on Escape or when focus leaves it', async ({
+  page,
+}) => {
+  // Instant scrolling and an instant header, so each step settles at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+  const links = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link');
+
+  // A landscape phone at 200% zoom (844x390) and 1280x1024 at 400%, the
+  // WCAG reflow case. The panel sat in the fixed header, taller than either
+  // viewport, so its last links could not be reached.
+  for (const [width, height] of [
+    [422, 195],
+    [320, 256],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+    // Project, Contribute, Docs, Contact and GitHub.
+    await expect(links).toHaveCount(5);
+    for (const link of await links.all()) {
+      const reachable = await link.evaluate((element) => {
+        element.scrollIntoView({ block: 'nearest' });
+        const box = element.getBoundingClientRect();
+        const x = box.left + box.width / 2;
+        const y = box.top + box.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return y < window.innerHeight && hit !== null && element.contains(hit);
+      });
+      expect(reachable, `${await link.innerText()} at ${width}x${height}`).toBe(
+        true,
+      );
+    }
+  }
+
+  // Escape closes the panel and puts focus back on its summary.
+  await links.first().focus();
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(summary).toBeFocused();
+
+  // Tabbing past the last link closes it too, so it never covers the control
+  // that now has focus.
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  await links.last().focus();
+  await page.keyboard.press('Tab');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(
+    page.locator('main').locator(':focus'),
+    'focus moved on into the page',
+  ).toHaveCount(1);
+});
+
+test('the Menu closes on a click or focus anywhere outside it', async ({
+  page,
+  isMobile,
+}) => {
+  if (!isMobile) await page.setViewportSize({ width: 1100, height: 800 });
+  await page.goto('/');
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+
+  // A click on page content that takes no focus moves focus to <body>, so no
+  // focusout names a next target. The panel stayed open, over the links the
+  // next Tab went on to from the click.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  const blank = await page.evaluate(() => {
+    const x = 16;
+    const y = window.innerHeight - 16;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      x,
+      y,
+      inMenu: hit?.closest('details.mobile-nav') != null,
+      focusable:
+        hit?.closest(
+          'a, button, input, select, textarea, summary, [tabindex]',
+        ) != null,
+    };
+  });
+  expect(blank.inMenu).toBe(false);
+  expect(blank.focusable).toBe(false);
+  await page.mouse.click(blank.x, blank.y);
+  await expect(menu).not.toHaveAttribute('open');
+  expect(
+    await page.evaluate(() => document.activeElement === document.body),
+  ).toBe(true);
+
+  // Focus that moves outside it closes it too, however it gets there.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  await page.locator('main a').first().focus();
+  await expect(menu).not.toHaveAttribute('open');
+
+  // A press on the panel's own padding is inside the Menu, so it stays open.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  const panel = page.getByRole('navigation', { name: 'Mobile navigation' });
+  const padding = await panel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = box.left + 6;
+    const y = box.top + 6;
+    return { x, y, onPanel: document.elementFromPoint(x, y) === element };
+  });
+  expect(padding.onPanel).toBe(true);
+  if (isMobile) await page.touchscreen.tap(padding.x, padding.y);
+  else await page.mouse.click(padding.x, padding.y);
+  await expect(menu).toHaveAttribute('open', '');
+
+  // And a press on one of its links still follows the link.
+  const link = panel.getByRole('link', { name: 'Contribute' });
+  if (isMobile) await link.tap();
+  else await link.click();
+  await expect(page).toHaveURL(/\/contribute\/$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Find work that fits how you think.',
   );
-  const recovery = page.locator('main');
-  await expect(recovery.getByRole('link', { name: /Home/ })).toBeVisible();
+});
+
+test(
+  'a Menu hidden by a resize past 72rem comes back closed',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/');
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(summary).toBeHidden();
+    await expect(menu).not.toHaveAttribute('open');
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect(summary).toBeVisible();
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(
+      page.getByRole('navigation', { name: 'Mobile navigation' }),
+    ).toBeHidden();
+  },
+);
+
+test(
+  'on the Atlas, Escape closes an open Menu first, then the explorer layer under it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    // 1100 px: the Menu stands in for the desktop nav, and the legend
+    // popover stays open on a click outside it (it closes so only on phones).
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    const legendInfo = page.locator('details.atlas-legend__info');
+    const legendSummary = legendInfo.locator('summary');
+
+    await legendSummary.click();
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(summary).toBeFocused();
+    // Closed, the Menu leaves Escape to the explorer's own stack.
+    await page.keyboard.press('Escape');
+    await expect(legendInfo).not.toHaveAttribute('open');
+
+    // Opened without taking focus (a scripted click), the Menu closes on
+    // Escape without pulling focus out of the explorer layer that has it.
+    await legendSummary.click();
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(legendSummary).toBeFocused();
+    await summary.evaluate((element: HTMLElement) => element.click());
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(legendSummary).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(legendInfo).not.toHaveAttribute('open');
+    await expect(legendSummary).toBeFocused();
+
+    // From <body>, focus goes to the summary, as it does from the Menu.
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    await summary.evaluate((element: HTMLElement) => element.click());
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(summary).toBeFocused();
+  },
+);
+
+/**
+ * The Menu opened from the keyboard over the Atlas catalog picker, which is
+ * not modal: the Menu paints above the picker and Escape closes it first.
+ */
+async function expectMenuOverCatalogPicker(page: Page): Promise<void> {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+  const trigger = page.getByRole('button', {
+    name: /Select dataset\. Current dataset:/,
+  });
+  const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+
+  await trigger.click();
   await expect(
-    recovery.getByRole('link', { name: /Contribute/ }),
-  ).toBeVisible();
-  await expect(
-    recovery.getByRole('link', { name: /Technical docs/ }),
-  ).toBeVisible();
+    catalog.getByRole('searchbox', { name: 'Search maps' }),
+  ).toBeFocused();
+  // The picker is not modal, so the keyboard can leave it open for the Menu.
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  await expect(catalog).toBeVisible();
+
+  // The portaled picker (z-index 1003) painted over the Menu's panel.
+  const overlap = await page.evaluate(() => {
+    const panel = document
+      .querySelector('.mobile-nav nav')!
+      .getBoundingClientRect();
+    const picker = document
+      .querySelector('.atlas-map-picker')!
+      .getBoundingClientRect();
+    const left = Math.max(panel.left, picker.left);
+    const right = Math.min(panel.right, picker.right);
+    const top = Math.max(panel.top, picker.top);
+    const bottom = Math.min(panel.bottom, picker.bottom);
+    const hit = document.elementFromPoint(
+      (left + right) / 2,
+      (top + bottom) / 2,
+    );
+    return {
+      height: bottom - top,
+      menuOnTop: hit?.closest('details.mobile-nav') != null,
+      width: right - left,
+    };
+  });
+  expect(overlap.width).toBeGreaterThan(0);
+  expect(overlap.height).toBeGreaterThan(0);
+  expect(overlap.menuOnTop).toBe(true);
+
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(catalog).toBeVisible();
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(catalog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+}
+
+test(
+  'a Menu opened from the keyboard over the catalog picker paints above it and closes first',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expectMenuOverCatalogPicker(page);
+  },
+);
+
+test(
+  'on a phone, a Menu opened from the keyboard over the full-screen catalog picker paints above it and closes first',
+  { tag: '@mobile-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await expectMenuOverCatalogPicker(page);
+  },
+);
+
+test('at large text sizes genomeOS Atlas moves into the Menu, so the home logo keeps its size', async ({
+  context,
+  page,
+}) => {
+  const header = page.locator('[data-site-header]');
+  const cta = header.locator('.launch-atlas-cta');
+  const launchInMenu = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+  const row = () =>
+    page.evaluate(() => {
+      const box = (selector: string) =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const inner = document.querySelector('.site-header__inner')!;
+      return {
+        logoWidth: box('.wordmark__logo').width,
+        menuRight: box('.mobile-nav summary').right,
+        overflow: inner.scrollWidth - inner.clientWidth,
+        screen: document.documentElement.clientWidth,
+      };
+    });
+
+  // At the default text size the action stays beside the Menu, not in it.
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto('/');
+  await expect(cta).toBeVisible();
+  await header.locator('.mobile-nav summary').click();
+  await expect(launchInMenu).toHaveCount(0);
+
+  // Text-only zoom: Chromium's default font size, which a browser's text-size
+  // setting changes (32 px is 200%). The lockup used to shrink to 1x0 at
+  // 390 px and 0x0 at 360 px, leaving the home link a bare focus ring.
+  // Page zoom narrows the viewport instead: a 390 px phone at 200% is 195 CSS
+  // px wide, where the lockup was 1x0 too.
+  const session = await context.newCDPSession(page);
+  for (const [fontSize, width, minLogoWidth] of [
+    [32, 390, 110],
+    [32, 360, 85],
+    [16, 195, 55],
+  ] as const) {
+    await session.send('Page.setFontSizes', {
+      fontSizes: { standard: fontSize },
+    });
+    await page.setViewportSize({ width, height: 780 });
+    await page.goto('/');
+    const label = `${width} px at ${fontSize} px text`;
+    await expect(cta, label).toBeHidden();
+    const measured = await row();
+    expect(measured.logoWidth, label).toBeGreaterThanOrEqual(minLogoWidth);
+    expect(measured.overflow, label).toBeLessThanOrEqual(0);
+    // On the screen at load. Some page copy is wider than the screen at these
+    // sizes, which on a phone widens the layout viewport a fixed box spans.
+    expect(measured.menuRight, label).toBeLessThanOrEqual(measured.screen);
+    await header.locator('.mobile-nav summary').click();
+    await expect(launchInMenu, label).toBeVisible();
+    await expect(launchInMenu, label).toHaveAttribute('href', '/app/');
+  }
+});
+
+test('landscape phones get the shorter landing bar', async ({ page }) => {
+  // iPhone 13 and Pixel 7 in landscape: wide enough for the desktop tier, so
+  // the bar was 100 px, 27-29% of the screen.
+  for (const [width, height] of [
+    [750, 342],
+    [863, 360],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    const layout = await page.evaluate(() => {
+      const header = document
+        .querySelector('[data-site-header]')!
+        .getBoundingClientRect();
+      return {
+        headerBottom: header.bottom,
+        headerHeight: header.height,
+        mainTop: document.querySelector('main')!.getBoundingClientRect().top,
+      };
+    });
+    const label = `${width}x${height}`;
+    expect(layout.headerHeight, label).toBeCloseTo(86.5, 0);
+    // The spacer follows the same tier, so the page starts where the bar ends.
+    expect(
+      Math.abs(layout.headerBottom - layout.mainTop),
+      label,
+    ).toBeLessThanOrEqual(0.5);
+    // A 3.2rem lockup (57.6 px at the 112.5% root), not the desktop 3.6rem
+    // (64.8 px), keeps the shorter bar's margins.
+    const logo = await measureHeaderLogo(page);
+    expect(logo.height, label).toBeCloseTo(57.6, 0);
+    expect(logo.width, label).toBeCloseTo((57.6 * 1395) / 300, 0);
+  }
 });
 
 for (const route of topLevelRoutes) {
@@ -290,122 +2909,26 @@ for (const route of topLevelRoutes) {
   });
 }
 
-test('reduced-motion preferences disable decorative hero movement', async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-
-  const animationName = await page
-    .locator('.hero__image')
-    .evaluate((element) => getComputedStyle(element).animationName);
-  expect(animationName).toBe('none');
-
-  const header = page.locator('.site-header');
-  await page.evaluate(() => window.scrollTo(0, 900));
-  await expect(header).not.toHaveClass(/site-header--compact/);
-  expect(Math.abs((await header.boundingBox())!.y)).toBeLessThanOrEqual(1);
-});
-
-test('public typography keeps body and supporting text comfortably large', async ({
-  page,
-}) => {
-  await page.goto('/');
-
-  const typeSizes = await page.evaluate(() => {
-    const selectors = [
-      'body',
-      '.desktop-nav a',
-      '.section-kicker',
-      '.site-footer p',
-      '.mission-copy p',
-    ];
-    return Object.fromEntries(
-      selectors.map((selector) => [
-        selector,
-        Number.parseFloat(
-          getComputedStyle(document.querySelector(selector)!).fontSize,
-        ),
-      ]),
-    );
-  });
-
-  expect(typeSizes.body).toBeGreaterThanOrEqual(19);
-  for (const [selector, size] of Object.entries(typeSizes)) {
-    if (selector !== 'body') expect(size).toBeGreaterThanOrEqual(16);
-  }
-});
-
-test('metric digits use a common height and baseline', async ({ page }) => {
-  await page.goto('/');
-
-  const numericStyle = await page
-    .locator('.metric data')
-    .first()
-    .evaluate((element) => ({
-      family: getComputedStyle(element).fontFamily,
-      variant: getComputedStyle(element).fontVariantNumeric,
-    }));
-  expect(numericStyle.family).toContain('Figtree');
-  expect(numericStyle.variant).toContain('lining-nums');
-  expect(numericStyle.variant).toContain('tabular-nums');
-});
-
-test('multi-scale illustrations load with accessible descriptions', async ({
-  page,
-}) => {
-  await page.goto('/project/');
-  const images = page.locator('.vision-card img');
-  await expect(images).toHaveCount(3);
-  for (const image of await images.all()) {
-    await image.scrollIntoViewIfNeeded();
-    await expect(image).toHaveJSProperty('complete', true);
-    expect(await image.getAttribute('alt')).not.toBe('');
-    expect(
-      await image.evaluate((element: HTMLImageElement) => element.naturalWidth),
-    ).toBe(1536);
-  }
-});
-
 test('introduction pages avoid unexplained internal milestone codes', async ({
   page,
 }) => {
-  for (const route of ['/', '/project/', '/app/']) {
+  for (const route of ['/', '/projects/', '/app/']) {
     await page.goto(route);
     const text = await page.locator('main').innerText();
     expect(text).not.toMatch(/\bP[0-9]+\b/);
   }
 });
 
-test('application cards reveal on scroll and respond to hover', async ({
-  page,
-  isMobile,
-}) => {
-  test.skip(isMobile, 'hover movement is a pointer interaction');
-  await page.goto('/');
-
-  const card = page.locator('.application-card').first();
-  await card.scrollIntoViewIfNeeded();
-  await expect(card).toHaveClass(/is-visible/);
-  const restingTransform = await card.evaluate(
-    (element) => getComputedStyle(element).transform,
-  );
-  await card.hover();
-  await page.waitForTimeout(250);
-  const hoverTransform = await card.evaluate(
-    (element) => getComputedStyle(element).transform,
-  );
-  expect(hoverTransform).not.toBe(restingTransform);
-});
-
 test('explorer changes entity, metric, context, and elevation', async ({
   page,
+  isMobile,
 }) => {
   test.setTimeout(90_000);
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   const layers = page.getByRole('group', { name: 'Layers' });
   await expect(
@@ -444,15 +2967,20 @@ test('explorer changes entity, metric, context, and elevation', async ({
   ).toHaveText(
     'Visualize measured and predicted allele frequencies across the world',
   );
-  const controlType = await controls.evaluate((element) => ({
-    field: Number.parseFloat(
-      getComputedStyle(element.querySelector('.atlas-field')!).fontSize,
-    ),
-    section: Number.parseFloat(
-      getComputedStyle(element.querySelector('.atlas-control-sheet > summary')!)
-        .fontSize,
-    ),
-  }));
+  const controlType = await page.evaluate((phone) => {
+    const field = document.querySelector(
+      phone
+        ? '.atlas-top-slot .atlas-field--entity'
+        : '.atlas-controls .atlas-field--entity',
+    );
+    const section = document.querySelector(
+      '.atlas-controls .atlas-control-sheet > summary',
+    );
+    return {
+      field: Number.parseFloat(getComputedStyle(field!).fontSize),
+      section: Number.parseFloat(getComputedStyle(section!).fontSize),
+    };
+  }, isMobile);
   expect(controlType.field).toBeCloseTo(13.25, 1);
   expect(controlType.section).toBeCloseTo(14.4, 1);
   await chooseAtlasMap(page, 'g6pd-deficiency');
@@ -489,6 +3017,27 @@ test('explorer changes entity, metric, context, and elevation', async ({
   await expect(page).toHaveURL(/metric=post_sd/);
 });
 
+test('desktop keeps the selector in the dock and the top slot empty', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'the top selector slot is filled only on phones');
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-top-slot')).toBeEmpty();
+  await expect(
+    page
+      .getByRole('complementary', { name: 'Explorer controls' })
+      .getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+  ).toBeVisible();
+  await expect(page.locator('.atlas-controls__intro h1')).toHaveCount(1);
+  await expect(
+    page.locator('aside.atlas-controls[data-sheet-state]'),
+  ).toHaveCount(0);
+});
+
 test('explorer switches among globe, map, and perspective views', async ({
   page,
 }) => {
@@ -498,6 +3047,7 @@ test('explorer switches among globe, map, and perspective views', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
   });
+  await expandExplorerSheet(page);
   await page.locator('summary').filter({ hasText: /^Map$/ }).click();
   await page
     .locator('summary')
@@ -514,11 +3064,7 @@ test('explorer switches among globe, map, and perspective views', async ({
 
 test('explorer restores a complete shareable URL', async ({ page }) => {
   test.setTimeout(90_000);
-  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
-  expect(servedCatalog.ok()).toBe(true);
-  const servedArtifacts = (await servedCatalog.json()) as {
-    artifacts: { id: string; model_version: string }[];
-  };
+  const servedArtifacts = await readInlineCatalog(page);
   expect(servedArtifacts.artifacts).toHaveLength(30);
   expect(servedArtifacts.artifacts).toContainEqual(
     expect.objectContaining({
@@ -544,6 +3090,7 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await expect(
     page.getByRole('button', { name: /Select dataset\. Current dataset:/ }),
@@ -577,15 +3124,7 @@ test('explorer recovers a stale version link for an available map', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
-  expect(servedCatalog.ok()).toBe(true);
-  const servedArtifacts = (await servedCatalog.json()) as {
-    artifacts: {
-      data_version: string;
-      id: string;
-      model_version: string;
-    }[];
-  };
+  const servedArtifacts = await readInlineCatalog(page);
   const current = servedArtifacts.artifacts.find(
     ({ id }) => id === 'hbs-rs334',
   );
@@ -617,6 +3156,7 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
   await expect(page.locator('[data-atlas-status-slot]')).toContainText(
     'Atlas ready',
   );
@@ -632,21 +3172,6 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
       .getByRole('option'),
   ).toHaveCount(30);
   await page.keyboard.press('Escape');
-  const completeSurface = await page.request.get(
-    '/data/atlas/hbs-rs334.surface.json',
-  );
-  expect(completeSurface.ok()).toBe(true);
-  expect(
-    ((await completeSurface.json()) as { cells: unknown[] }).cells,
-  ).toHaveLength(77_844);
-  const completeObservations = await page.request.get(
-    '/data/atlas/hbs-rs334.observations.json',
-  );
-  expect(completeObservations.ok()).toBe(true);
-  expect(
-    ((await completeObservations.json()) as { observations: unknown[] })
-      .observations,
-  ).toHaveLength(1_071);
 
   const mapHelp = page.getByRole('button', { name: 'About map selection' });
   await mapHelp.click();
@@ -862,6 +3387,206 @@ test('explorer groups and explains maps before selection', async ({ page }) => {
   await expect(page).toHaveURL(/entity=hla-b-58-01/);
 });
 
+test('each Escape closes only the innermost explorer layer', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'phone layering with the sheets is covered in atlas-mobile.spec.ts',
+  );
+  test.setTimeout(60_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  const legendInfo = page.locator('details.atlas-legend__info');
+  const legendSummary = legendInfo.locator('summary');
+  await legendSummary.click();
+  await expect(legendInfo).toHaveAttribute('open', '');
+  await page.keyboard.press('Escape');
+  await expect(legendInfo).not.toHaveAttribute('open', '');
+  await expect(legendSummary).toBeFocused();
+
+  await page.getByRole('button', { name: 'More info' }).click();
+  const externalPanel = page.getByRole('complementary', {
+    name: 'External variant information',
+  });
+  await expect(externalPanel).toBeVisible();
+  await page.getByRole('button', { name: 'About map selection' }).click();
+  await expect(
+    page.getByRole('tooltip').filter({ hasText: 'Choose a versioned' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(externalPanel).toBeVisible();
+
+  await legendSummary.click();
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+  await expect(catalog).toBeVisible();
+  // The legend popover closes from inside the catalog without pulling focus out of it.
+  const catalogSearch = catalog.getByRole('searchbox', { name: 'Search maps' });
+  await expect(catalogSearch).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(legendInfo).not.toHaveAttribute('open', '');
+  await expect(catalog).toBeVisible();
+  await expect(catalogSearch).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(catalog).toHaveCount(0);
+  await expect(externalPanel).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(externalPanel).toHaveCount(0);
+});
+
+test('information triggers keep 24 px targets on every screen', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const targets = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        '.atlas-info-tip__trigger, .atlas-legend__info summary',
+      ),
+    ]
+      .map((element) => ({
+        label: element.getAttribute('aria-label') ?? '',
+        rect: element.getBoundingClientRect(),
+      }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      .map(({ label, rect }) => ({
+        height: rect.height,
+        label,
+        width: rect.width,
+      })),
+  );
+  expect(targets.length).toBeGreaterThan(5);
+  expect(targets.map(({ label }) => label)).toContain('About displayed metric');
+  for (const target of targets) {
+    expect(target.width, target.label).toBeGreaterThanOrEqual(24);
+    expect(target.height, target.label).toBeGreaterThanOrEqual(24);
+  }
+});
+
+test('the legend info summary takes pointers across its whole 24 px box', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'the desktop data credit sits under the legend at this size',
+  );
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  // The summary is round, so sample the corners of its inscribed square (2 px
+  // inside them) and the bottom of the circle, where the credit used to sit.
+  const corners = await page
+    .locator('.atlas-legend__info summary')
+    .evaluate((summary) => {
+      const rect = summary.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const reach = Math.min(rect.width, rect.height) / 2 / Math.SQRT2 - 2;
+      return [
+        [x - reach, y - reach],
+        [x + reach, y - reach],
+        [x - reach, y + reach],
+        [x + reach, y + reach],
+        [x, rect.bottom - 2],
+      ].map(([px, py]) => {
+        const hit = document.elementFromPoint(px!, py!);
+        return hit !== null && summary.contains(hit)
+          ? 'summary'
+          : `${hit?.tagName.toLowerCase()}.${hit?.className}`;
+      });
+    });
+  expect(corners).toEqual(Array(5).fill('summary'));
+});
+
+test('the legend keeps its row while it shows the loading status', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'atlas-mobile.spec.ts holds the phone strip to its row',
+  );
+  // The centred legend at its minimum width, then the right-docked one (≤ 75rem).
+  const viewports = [
+    { height: 900, width: 1440 },
+    { height: 800, width: 1100 },
+  ];
+  await page.setViewportSize(viewports[0]!);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const before: LegendRow[] = [];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    before.push(await legendRow(page));
+  }
+  await markLegendLoading(page);
+  const legend = page.getByRole('complementary', { name: 'Map legend' });
+  for (const [index, viewport] of viewports.entries()) {
+    await page.setViewportSize(viewport);
+    const size = `${viewport.width}x${viewport.height}`;
+    await expect(legend.getByRole('status'), size).toHaveText('Loading map…');
+    await expect(legend.getByRole('status'), size).toBeVisible();
+    await expect(
+      legend.locator('.atlas-legend__mode:not(.atlas-legend__loading)'),
+      size,
+    ).toBeVisible();
+    // A line of its own above the row: the row keeps its ramp, its mode pill
+    // and its info trigger, and does not move (the legend grows upward).
+    const row = await legendRow(page);
+    expect(row.status, size).toEqual({ aboveRow: true, insideLegend: true });
+    expect(row.infoInRow, size).toBe(true);
+    expect(
+      Math.abs(row.rowTop - before[index]!.rowTop),
+      size,
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(row.rampWidth - before[index]!.rampWidth),
+      size,
+    ).toBeLessThanOrEqual(1);
+    expect(row.overflow, size).toBeLessThanOrEqual(0);
+  }
+});
+
+test('the explorer shows the legend loading status in its row during the cold reveal', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'atlas-mobile.spec.ts checks the phone strip',
+  );
+  await recordLegendLoading(page);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const loading = await recordedLegendLoading(page);
+  expect(loading, 'the legend rendered its cold-reveal state').not.toBeNull();
+  expect(loading!.statusText).toBe('Loading map…');
+  expect(loading!.statusShown).toBe(true);
+  expect(loading!.status).toEqual({ aboveRow: true, insideLegend: true });
+  expect(loading!.infoBesideLabel).toBe(true);
+  expect(loading!.infoInRow).toBe(true);
+  expect(loading!.overflow).toBeLessThanOrEqual(0);
+  // The commit ends the reveal and takes the status away.
+  const legend = page.getByRole('complementary', { name: 'Map legend' });
+  await expect(legend).not.toHaveAttribute('data-atlas-legend-loading', 'true');
+  await expect(legend.getByRole('status')).toHaveCount(0);
+});
+
 test('height exaggeration uses the available compact control width', async ({
   page,
 }, testInfo) => {
@@ -903,6 +3628,7 @@ test('explorer offers the full basemap and terrain gallery', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await page.locator('summary').filter({ hasText: /^Map$/ }).click();
   await page
@@ -946,6 +3672,7 @@ test('left control sections expand and collapse with motion', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   const sheet = page
     .locator('details.atlas-control-sheet')
@@ -974,17 +3701,29 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
+  const { artifact: artifactBase } = (await page
+    .locator('#atlas-data-bases')
+    .evaluate((element) => JSON.parse(element.textContent ?? 'null'))) as {
+    artifact: string;
+  };
   await page.locator('.atlas-downloads > summary').click();
-  await expect(
-    page.getByRole('link', { name: 'Artifact manifest' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.manifest.json');
-  await expect(
-    page.getByRole('link', { name: 'Measured observations' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.observations.json');
-  await expect(
-    page.getByRole('link', { name: 'Inferred surface' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.surface.json');
+  const hbs = (await readInlineCatalog(page)).artifacts.find(
+    ({ id }) => id === 'hbs-rs334',
+  );
+  if (hbs?.downloads.observations == null)
+    throw new Error('hbs-rs334 downloads are missing from the inline catalog');
+  for (const [name, key] of [
+    ['Artifact manifest', hbs.downloads.manifest.url],
+    ['Measured observations', hbs.downloads.observations.url],
+    ['Inferred surface', hbs.downloads.surface.url],
+  ] as const) {
+    await expect(page.getByRole('link', { name })).toHaveAttribute(
+      'href',
+      dataHref(key, artifactBase),
+    );
+  }
 
   await page.getByRole('button', { name: 'More info' }).click();
   const externalPanel = page.getByRole('complementary', {
@@ -1100,11 +3839,15 @@ test('explorer previews and opens separate surface and observation inspectors', 
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expect(page.locator('[data-atlas-values-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
   const canvas = page.locator('.atlas-scene canvas').first();
   const hoverPreview = page.locator('.atlas-hover-preview');
-  const hoverNearCenter = async () => {
-    const box = await canvas.boundingBox();
-    expect(box).not.toBeNull();
+  // Near a point on the globe: the camera target, which desktop draws in the open area beside the
+  // controls, or a cell just west of it that the inspector will not cover (#452).
+  const hoverNearCenter = async (centre: Point) => {
+    await waitForRevealWave(page);
     for (const [offsetX, offsetY] of [
       [0, 0],
       [-18, 0],
@@ -1116,16 +3859,12 @@ test('explorer previews and opens separate surface and observation inspectors', 
       [-18, 18],
       [18, 18],
     ]) {
-      await page.mouse.move(
-        box!.x + box!.width / 2 + offsetX,
-        box!.y + box!.height / 2 + offsetY,
-      );
+      await page.mouse.move(centre.x + offsetX, centre.y + offsetY);
       if (await hoverPreview.isVisible()) return;
     }
   };
-  const clickNearCenter = async (inspector: Locator) => {
-    const box = await canvas.boundingBox();
-    expect(box).not.toBeNull();
+  const clickNearCenter = async (inspector: Locator, centre: Point) => {
+    await waitForRevealWave(page);
     for (const [offsetX, offsetY] of [
       [0, 0],
       [-18, 0],
@@ -1137,10 +3876,7 @@ test('explorer previews and opens separate surface and observation inspectors', 
       [-18, 18],
       [18, 18],
     ]) {
-      await page.mouse.click(
-        box!.x + box!.width / 2 + offsetX,
-        box!.y + box!.height / 2 + offsetY,
-      );
+      await page.mouse.click(centre.x + offsetX, centre.y + offsetY);
       if (await inspector.isVisible()) return;
     }
   };
@@ -1157,12 +3893,14 @@ test('explorer previews and opens separate surface and observation inspectors', 
   const surfaceInspector = page.getByRole('complementary', {
     name: 'Selected map cell',
   });
-  await hoverNearCenter();
+  // The surface inspector opens in the right rail; the pointer stays on the globe beside it.
+  const besideTarget = await besideGlobeCentre(page);
+  await hoverNearCenter(besideTarget);
   await expect(hoverPreview).toContainText('Modeled estimate');
   await expect(hoverPreview).toContainText('Posterior');
   await expect(hoverPreview).toContainText('95% credible range');
   await expect(hoverPreview).toContainText('Uncertainty');
-  await clickNearCenter(surfaceInspector);
+  await clickNearCenter(surfaceInspector, besideTarget);
   await expect(surfaceInspector).toBeVisible();
   await expect(hoverPreview).toBeVisible();
   const inspectorMetrics = await surfaceInspector.evaluate((element) => ({
@@ -1239,13 +3977,15 @@ test('explorer previews and opens separate surface and observation inspectors', 
   const observationInspector = page.getByRole('complementary', {
     name: 'Selected observation',
   });
-  await hoverNearCenter();
+  // The measured point sits at the camera target.
+  const target = await globeViewCentre(page);
+  await hoverNearCenter(target);
   await expect(hoverPreview).toBeVisible();
   await expect(hoverPreview).toContainText('Allele count (AC)');
   await expect(
     hoverPreview.locator('[data-observation-color]'),
   ).toHaveAttribute('data-observation-color', /^#[0-9a-f]{6}$/);
-  await clickNearCenter(observationInspector);
+  await clickNearCenter(observationInspector, target);
   await expect(observationInspector).toBeVisible();
   await expect(observationInspector).toContainText('Allele count (AC)');
   await expect(
@@ -1270,6 +4010,237 @@ test('explorer previews and opens separate surface and observation inspectors', 
   await expect(observationInspector).toHaveCount(0);
 });
 
+/**
+ * The HbS hover preview, its detail tier held, shows `cell`'s render-tier readouts. It names no
+ * cell (#449), and `heldReadoutsOf` refuses readouts another fixture cell shares, so these name it.
+ */
+async function expectHoverOnCell(
+  hoverPreview: Locator,
+  cell: string,
+): Promise<void> {
+  const held = heldReadoutsOf('hbs-rs334', cell);
+  await expect(valueRow(hoverPreview, 'Posterior')).toHaveText(held.posterior);
+  await expect(valueRow(hoverPreview, 'Uncertainty')).toHaveText(
+    held.uncertainty,
+  );
+}
+
+test.describe(
+  'the desktop globe beside the controls panel (#452)',
+  { tag: '@desktop-chromium' },
+  () => {
+    /** Covered canvas width from the layout: the panel's right edge minus the canvas's left. */
+    const coveredWidth = (page: Page) =>
+      page.evaluate(() => {
+        const canvas = document
+          .querySelector('.atlas-scene canvas')!
+          .getBoundingClientRect();
+        const panel = document
+          .querySelector('aside.atlas-controls')!
+          .getBoundingClientRect();
+        return panel.right - canvas.left;
+      });
+    const discOffCentre = async (page: Page, expected: () => Promise<Point>) =>
+      Math.abs((await measureGlobeDisc(page)).centreX - (await expected()).x);
+
+    test('is drawn centred in the open area, and at the canvas centre while the panel is hidden', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${GLOBE_DISC_QUERY}`);
+      await waitForSettledGlobe(page);
+      const covered = await coveredWidth(page);
+      const centre = await canvasCentre(page);
+      // The panel covers the left of the full-width canvas, and the camera target is drawn
+      // half that width right of the canvas centre, in the middle of the open area.
+      expect(covered).toBeGreaterThan(300);
+      await expect
+        .poll(() =>
+          discOffCentre(page, async () => ({
+            x: centre.x + covered / 2,
+            y: centre.y,
+          })),
+        )
+        .toBeLessThanOrEqual(4);
+      expect((await measureGlobeDisc(page)).left).toBeGreaterThan(covered);
+
+      const panel = page.locator('aside.atlas-controls');
+      await panel.evaluate((element: HTMLElement) => {
+        element.hidden = true;
+      });
+      await expect
+        .poll(() => discOffCentre(page, () => canvasCentre(page)))
+        .toBeLessThanOrEqual(4);
+      await panel.evaluate((element: HTMLElement) => {
+        element.hidden = false;
+      });
+      await expect
+        .poll(() =>
+          discOffCentre(page, async () => ({
+            x: centre.x + covered / 2,
+            y: centre.y,
+          })),
+        )
+        .toBeLessThanOrEqual(4);
+
+      // A narrower window narrows the dock (21rem below 75rem) and moves the globe with it.
+      await page.setViewportSize({ height: 720, width: 1100 });
+      await expect.poll(() => coveredWidth(page)).toBeLessThan(covered);
+      await expect
+        .poll(() => discOffCentre(page, () => globeViewCentre(page)))
+        .toBeLessThanOrEqual(4);
+    });
+
+    test('hover and click select the cell drawn under the pointer', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      // Held cell values keep the hover preview on the render tier's readouts, which name the cell.
+      const detail = await delayArtifactTier(
+        page,
+        'hbs-rs334',
+        'detail',
+        Number.POSITIVE_INFINITY,
+      );
+      // A camera straight above a resolution-4 cell's centroid (the e2e grid's resolution).
+      const cell = latLngToCell(40.4407, -3.7201, 4);
+      const [lat, lon] = cellToLatLng(cell);
+      const query = new URLSearchParams({
+        heading: '0',
+        height: '1000000',
+        lat: String(lat),
+        layers: 'surface,support,context,countries',
+        lon: String(lon),
+        pitch: '-90',
+        // No measured points or their sampling radii: they would win the pick over the cell.
+        samplingAreas: 'false',
+      });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${query}`);
+      await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+        timeout: 45_000,
+      });
+      const target = await globeViewCentre(page);
+      expect(target.x - (await canvasCentre(page)).x).toBeGreaterThan(150);
+
+      const hoverPreview = page.locator('.atlas-hover-preview');
+      await page.mouse.move(target.x, target.y);
+      await expectHoverOnCell(hoverPreview, cell);
+      const inspector = page.getByRole('complementary', {
+        name: 'Selected map cell',
+      });
+      const cellId = inspector
+        .locator('dt', { hasText: 'Cell ID' })
+        .locator('..')
+        .locator('dd');
+      await page.mouse.click(target.x, target.y);
+      await expect(cellId).toHaveText(cell);
+
+      detail.release();
+    });
+
+    for (const [geometry, elevation] of [
+      ['triangles', 'false'],
+      ['extruded', 'true'],
+    ] as const) {
+      test(`from 8,000 km the ${geometry} surface${elevation === 'true' ? ' at elevation' : ''} picks the cell drawn under the pointer`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        const detail = await delayArtifactTier(
+          page,
+          'hbs-rs334',
+          'detail',
+          Number.POSITIVE_INFINITY,
+        );
+        // From orbit the fixture's cells are a small patch, so a pick pass culled around the
+        // unshifted ray (thousands of km east of the pointer) would miss them; elevation reads
+        // depth through the translucent pick pass.
+        const cell = latLngToCell(40.4407, -3.7201, 4);
+        const [lat, lon] = cellToLatLng(cell);
+        const query = new URLSearchParams({
+          elevation,
+          exaggeration: '3',
+          geometry,
+          heading: '0',
+          height: '8000000',
+          lat: String(lat),
+          layers: 'surface,support,context,countries',
+          lon: String(lon),
+          pitch: '-90',
+          samplingAreas: 'false',
+        });
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto(`/app/?${query}`);
+        await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+          timeout: 45_000,
+        });
+        const target = await globeViewCentre(page);
+        await page.mouse.move(target.x, target.y);
+        await expectHoverOnCell(page.locator('.atlas-hover-preview'), cell);
+        await page.mouse.click(target.x, target.y);
+        await expect(
+          page
+            .getByRole('complementary', { name: 'Selected map cell' })
+            .locator('dt', { hasText: 'Cell ID' })
+            .locator('..')
+            .locator('dd'),
+        ).toHaveText(cell);
+        detail.release();
+      });
+    }
+
+    test('wheel zoom keeps the ground under the cursor there, as on a centred globe', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      const detail = await delayArtifactTier(
+        page,
+        'hbs-rs334',
+        'detail',
+        Number.POSITIVE_INFINITY,
+      );
+      // Above 1,000 km Cesium zooms to the cursor by turning the globe towards its canvas centre.
+      const cell = latLngToCell(40.4407, -3.7201, 4);
+      const [lat, lon] = cellToLatLng(cell);
+      const query = new URLSearchParams({
+        heading: '0',
+        height: '4000000',
+        lat: String(lat),
+        layers: 'surface,support,context,countries',
+        lon: String(lon),
+        pitch: '-90',
+        samplingAreas: 'false',
+      });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${query}`);
+      await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+        timeout: 45_000,
+      });
+      const target = await globeViewCentre(page);
+      await page.mouse.move(target.x, target.y);
+      await expectHoverOnCell(page.locator('.atlas-hover-preview'), cell);
+      for (let notch = 0; notch < 3; notch += 1)
+        await page.mouse.wheel(0, -120);
+      // The URL takes the camera once it settles.
+      await expect
+        .poll(() => Number(new URL(page.url()).searchParams.get('height')))
+        .toBeLessThan(3_500_000);
+      const inspector = page.getByRole('complementary', {
+        name: 'Selected map cell',
+      });
+      await page.mouse.click(target.x, target.y);
+      await expect(
+        inspector
+          .locator('dt', { hasText: 'Cell ID' })
+          .locator('..')
+          .locator('dd'),
+      ).toHaveText(cell);
+      detail.release();
+    });
+  },
+);
+
 test('explorer reports unavailable WebGL with a retry action', async ({
   page,
 }) => {
@@ -1279,6 +4250,163 @@ test('explorer reports unavailable WebGL with a retry action', async ({
   await page.goto('/app/');
   await expect(page.getByText('This globe needs WebGL')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry globe' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Browser requirements' }),
+  ).toBeVisible();
+});
+
+test('explorer recovers from a render-loop error through Retry globe', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  // Live failure: one transient worker-module fetch ("Failed to fetch dynamically imported
+  // module …/createPolygonGeometry.js") threw inside a Cesium frame, Cesium showed its raw error
+  // panel, and rendering stopped for good. The fast-load scene builds no Cesium PolygonGeometry,
+  // so it never requests that module, and a failed terrain worker fetch fails only its tile. The
+  // sky box is the same failure class: its cube-map faces are fetched from inside Scene.render once
+  // the map is ready and the borders and detail-tier steps of the post-reveal load order have
+  // settled (fast-load design §B.6.9), and Cesium rethrows a failed face load on the next frame. Aborting only the first request for one face reproduces the raw panel without the
+  // Atlas render loop, and the sky box draws only in the 3-D globe view.
+  let skyFaceRequests = 0;
+  await context.route(
+    '**/cesium/Assets/Textures/SkyBox/tycho2t3_80_px.jpg',
+    (route) => {
+      skyFaceRequests += 1;
+      return skyFaceRequests === 1 ? route.abort() : route.continue();
+    },
+  );
+  // The binding and init script survive navigation, so a raw panel on any document is caught.
+  let rawPanelSeen = false;
+  await page.exposeFunction('reportRawCesiumErrorPanel', () => {
+    rawPanelSeen = true;
+  });
+  await page.addInitScript(() => {
+    const binding = window as Window & {
+      reportRawCesiumErrorPanel?: () => Promise<void>;
+    };
+    new MutationObserver((_, observer) => {
+      if (!document.querySelector('.cesium-widget-errorPanel')) return;
+      observer.disconnect();
+      void binding.reportRawCesiumErrorPanel?.();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  // Retry reloads the page, so a non-default map, metric and opacity must come back from the URL.
+  await page.goto('/app/?entity=g6pd-deficiency&metric=post_sd&opacity=0.4');
+
+  const rawPanel = page.locator('.cesium-widget-errorPanel');
+  const explorer = page.locator('[data-atlas-explorer]');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'The globe stopped rendering' });
+  await expect(failure.or(rawPanel).first()).toBeVisible({ timeout: 60_000 });
+  await expect(rawPanel).toHaveCount(0);
+  await expect(failure).toContainText('network or graphics error');
+  await expect(failure).toContainText('Retry reloads the explorer');
+  await expect(
+    failure.getByRole('link', { name: 'Browser requirements' }),
+  ).toHaveCount(0);
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'false');
+  expect(skyFaceRequests).toBeGreaterThan(0);
+
+  await page.evaluate(() => {
+    (window as Window & { beforeRetry?: boolean }).beforeRetry = true;
+  });
+  await Promise.all([
+    page.waitForEvent('load'),
+    failure.getByRole('button', { name: 'Retry globe' }).click(),
+  ]);
+  expect(
+    await page.evaluate(
+      () => (window as Window & { beforeRetry?: boolean }).beforeRetry,
+    ),
+  ).toBeUndefined();
+  await expect(
+    page.locator(
+      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+    ),
+  ).toBeVisible({ timeout: 60_000 });
+  const restored = new URL(page.url()).searchParams;
+  expect(restored.get('entity')).toBe('g6pd-deficiency');
+  expect(restored.get('metric')).toBe('post_sd');
+  expect(restored.get('opacity')).toBe('0.4');
+  // The recovered globe reveals its surface as a wave again (#453).
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  expect(
+    await page.evaluate(
+      () => performance.getEntriesByName('atlas:reveal-wave').length,
+    ),
+  ).toBe(1);
+  await expect(failure).toHaveCount(0);
+  await expect(rawPanel).toHaveCount(0);
+  expect(rawPanelSeen).toBe(false);
+});
+
+test('Retry globe recovers from a failed scene-chunk download', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // Chromium caches a failed dynamic import in the module map, so only a reload fetches it again.
+  const sceneRequests: string[] = [];
+  await page.route(/\/_astro\/atlas-scene\.[^/]+\.js$/, async (route) => {
+    sceneRequests.push(route.request().url());
+    if (sceneRequests.length === 1) await route.abort('failed');
+    else await route.fallback();
+  });
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await page.goto('/app/?metric=post_sd');
+  await expect(page.getByText('The globe could not load')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.getByText('This globe needs WebGL')).toHaveCount(0);
+  expect(consoleErrors).toContainEqual(
+    expect.stringContaining('The Atlas globe scene could not be loaded.'),
+  );
+  await page.getByRole('button', { name: 'Retry globe' }).click();
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  expect(sceneRequests).toHaveLength(2);
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+});
+
+test('Retry globe recovers from a data worker whose script failed to download', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // A dead data worker fails every later request, and only a new page starts a new one, so the
+  // explorer offers the reload panel instead of a "Retry data" that would fail the same way. The
+  // globe is not what failed, so the panel names the map data (fast-load §B.7, amended).
+  let workerRequests = 0;
+  await page.route(/\/_astro\/atlas-data\.worker-[^/]+\.js$/, async (route) => {
+    workerRequests += 1;
+    if (workerRequests === 1) await route.abort('failed');
+    else await route.fallback();
+  });
+  await page.goto('/app/?metric=post_sd');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'The map data could not load' });
+  await expect(failure).toBeVisible({ timeout: 45_000 });
+  await expect(failure).toContainText('Retrying reloads the page');
+  await expect(page.getByText('The globe could not load')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry data' })).toHaveCount(0);
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-ready',
+    'false',
+  );
+  await Promise.all([
+    page.waitForEvent('load'),
+    failure.getByRole('button', { name: 'Retry globe' }).click(),
+  ]);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  expect(workerRequests).toBe(2);
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
 });
 
 test('polygon map validates a selected model cell before loading Google Maps', async ({
@@ -1288,4 +4416,1019 @@ test('polygon map validates a selected model cell before loading Google Maps', a
   await expect(page.getByRole('status')).toContainText(
     'domain-restricted Google Maps browser key',
   );
+});
+
+test('cold load shows observations, then the surface, then outlines and borders', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // Every response in arrival order, so a file fetched twice is listed twice.
+  const responses: { status: number; url: URL }[] = [];
+  page.on('response', (response) =>
+    responses.push({ status: response.status(), url: new URL(response.url()) }),
+  );
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  for (const attribute of [
+    'data-atlas-observations-visible',
+    'data-atlas-surface-visible',
+    'data-atlas-ready',
+    'data-atlas-edges-ready',
+    'data-atlas-context-ready',
+  ])
+    await expect(explorer).toHaveAttribute(attribute, 'true', {
+      timeout: 45_000,
+    });
+  await expect(explorer).toHaveAttribute('data-atlas-displayed', 'hbs-rs334');
+
+  const marks = await page.evaluate(() =>
+    Object.fromEntries(
+      [
+        'observations-visible',
+        'surface-first-chunk',
+        'surface-visible',
+        'ready',
+        'edges-ready',
+        'context-ready',
+      ].map((name) => [
+        name,
+        performance.getEntriesByName(`atlas:${name}`)[0]?.startTime ?? null,
+      ]),
+    ),
+  );
+  for (const value of Object.values(marks)) expect(value).not.toBeNull();
+  expect(marks['observations-visible']!).toBeLessThanOrEqual(
+    marks['surface-visible']!,
+  );
+  expect(marks['surface-first-chunk']!).toBeLessThanOrEqual(
+    marks['surface-visible']!,
+  );
+  // `ready` means surface, support and observations are all visible (§B.1).
+  expect(marks['observations-visible']!).toBeLessThanOrEqual(marks['ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['edges-ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(
+    marks['context-ready']!,
+  );
+  const reveal = JSON.parse(
+    (await explorer.getAttribute('data-atlas-reveal')) ?? '{}',
+  );
+  expect(reveal.frames).toBeGreaterThan(0);
+  expect(reveal.longestFrameMs).toBeGreaterThanOrEqual(0);
+
+  // The borders drawn are the compact file the catalog names (fast-load §B.10, #445); the
+  // GeoJSON is no longer served or fetched.
+  const borders = (await readInlineCatalog(page)).context_sources.find(
+    ({ id }) => id === 'natural-earth-admin-0',
+  )!.url;
+  expect(borders).toBe('ne-50m-admin-0.borders.bin');
+  const fetched = responses.filter(({ url }) => urlMatchesKey(url, borders));
+  expect(fetched.map(({ status }) => status)).toEqual([200]);
+  expect(
+    responses.filter(({ url }) => url.pathname.endsWith('.geojson')),
+  ).toEqual([]);
+});
+
+test('after the reveal, the borders load first, then the detail tier, then the starfield', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // Fast-load design §B.6.9 (#443): each post-reveal load starts once the one before it has
+  // settled, so none shares the connection. The borders settle at their last byte, the detail tier
+  // once it is decoded.
+  const catalog = await readInlineCatalog(page);
+  const borders = contextSourceKey(
+    catalog as unknown as AtlasCatalog,
+    NATURAL_EARTH_BORDERS,
+  );
+  const detail = artifactTierKey(catalog, 'hbs-rs334', 'detail');
+  const SKY_BOX = '/cesium/Assets/Textures/SkyBox/';
+  const starts: string[] = [];
+  const failures: string[] = [];
+  const loadOf = (raw: string): string | null => {
+    const url = new URL(raw);
+    if (urlMatchesKey(url, borders)) return 'borders';
+    if (urlMatchesKey(url, detail)) return 'detail';
+    if (url.pathname.includes(SKY_BOX)) return 'starfield';
+    return null;
+  };
+  page.on('request', (request) => {
+    const load = loadOf(request.url());
+    if (load) starts.push(load);
+  });
+  page.on('requestfailed', (request) => {
+    const load = loadOf(request.url());
+    if (load) failures.push(load);
+  });
+
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-displayed', 'hbs-rs334', {
+    timeout: 45_000,
+  });
+  await expect
+    .poll(() => starts.includes('starfield'), { timeout: 45_000 })
+    .toBe(true);
+
+  // Request start order.
+  expect(failures).toEqual([]);
+  expect(starts.slice(0, 2)).toEqual(['borders', 'detail']);
+  expect(starts.filter((load) => load === 'borders')).toHaveLength(1);
+  expect(starts.filter((load) => load === 'detail')).toHaveLength(1);
+  expect(starts.slice(2).every((load) => load === 'starfield')).toBe(true);
+
+  // Each settles before the next starts, on the page's own clock. A resource entry appears once
+  // its response has ended.
+  const readTiming = () =>
+    page.evaluate(
+      ({ borders, detail, skyBox }) => {
+        const entries = performance.getEntriesByType(
+          'resource',
+        ) as PerformanceResourceTiming[];
+        const of = (match: (path: string) => boolean) =>
+          entries
+            .filter((entry) => match(new URL(entry.name).pathname))
+            .map((entry) => ({
+              end: entry.responseEnd,
+              start: entry.startTime,
+            }));
+        return {
+          borders: of((path) => path.endsWith(`/${borders}`)),
+          detail: of((path) => path.endsWith(`/${detail}`)),
+          skyStarts: of((path) => path.includes(skyBox)).map(
+            (entry) => entry.start,
+          ),
+          surfaceVisible:
+            performance.getEntriesByName('atlas:surface-visible')[0]
+              ?.startTime ?? null,
+        };
+      },
+      { borders, detail, skyBox: SKY_BOX },
+    );
+  // Cesium's sky box has six faces.
+  await expect
+    .poll(async () => (await readTiming()).skyStarts.length, {
+      timeout: 45_000,
+    })
+    .toBe(6);
+  const timing = await readTiming();
+  expect(timing.borders).toHaveLength(1);
+  expect(timing.detail).toHaveLength(1);
+  expect(timing.surfaceVisible).not.toBeNull();
+  expect(timing.surfaceVisible!).toBeLessThanOrEqual(timing.borders[0].start);
+  expect(timing.borders[0].end).toBeLessThanOrEqual(timing.detail[0].start);
+  expect(timing.detail[0].end).toBeLessThanOrEqual(
+    Math.min(...timing.skyStarts),
+  );
+  // The order releases the next load at the borders' last byte, while their time-sliced drawing
+  // carries on (§B.6.9), so context-ready has no fixed bound relative to the sky box. At 6× CPU it
+  // lands ~6 s after the first face starts, so wait for it like every other milestone.
+  await expect(explorer).toHaveAttribute('data-atlas-context-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+});
+
+test('the surface reveals as a wave from the view centre to the horizon (#453)', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await holdRevealWaveFromStart(page, 0);
+  await page.goto(`/app/?${SURFACE_ONLY}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  // Held at its start: every chunk is added, and nothing has grown yet.
+  await expect(explorer).toHaveAttribute('data-atlas-surface-visible', 'true');
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'running');
+  await cameraAtRest(page);
+  const view = await globeView(page);
+  const before = await waveFrame(page);
+  await holdRevealWave(page, EARLY_PROGRESS);
+  const early = await waveFrame(page);
+  await holdRevealWave(page, null);
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  await renderedFrames(page);
+  const done = await waveFrame(page);
+
+  const reading = await readWave(page, { before, done, early }, view);
+  // Early in the wave the view centre is coloured and the limb is not; after it, both are.
+  expect(reading.centreEarly).toBeGreaterThan(0);
+  expect(reading.centreDone).toBeGreaterThan(0);
+  expect(reading.far).toBeGreaterThan(0);
+  expect(reading.farEarly).toBe(0);
+  expect(
+    await page.evaluate(
+      () => performance.getEntriesByName('atlas:reveal-wave').length,
+    ),
+  ).toBe(1);
+});
+
+test('a dataset switch retires the old surface at once and grows the new one from the centre (#453)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await holdRevealWaveFromStart(page, 0);
+  await page.goto(`/app/?${SURFACE_ONLY}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'running');
+  await cameraAtRest(page);
+  const view = await globeView(page);
+  const empty = await waveFrame(page);
+  await holdRevealWave(page, null);
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  await renderedFrames(page);
+  const hbs = await waveFrame(page);
+
+  await holdRevealWave(page, 0);
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await expect(explorer).toHaveAttribute(
+    'data-atlas-active',
+    'g6pd-deficiency',
+    { timeout: 45_000 },
+  );
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'running');
+  await expect(
+    page.locator('[role="option"][data-map-id="g6pd-deficiency"]'),
+  ).toBeHidden();
+  await renderedFrames(page);
+  const before = await waveFrame(page);
+  // At the commit the old surface is gone: none of HbS shows, near the centre or the limb.
+  const gone = await readWave(
+    page,
+    { before: empty, done: hbs, early: before },
+    view,
+  );
+  expect(gone.centreDone).toBeGreaterThan(0);
+  expect(gone.far).toBeGreaterThan(0);
+  expect(gone.centreEarly).toBe(0);
+  expect(gone.farEarly).toBe(0);
+
+  await holdRevealWave(page, EARLY_PROGRESS);
+  const early = await waveFrame(page);
+  await holdRevealWave(page, null);
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  await renderedFrames(page);
+  const done = await waveFrame(page);
+  const reading = await readWave(page, { before, done, early }, view);
+  expect(reading.centreEarly).toBeGreaterThan(0);
+  expect(reading.far).toBeGreaterThan(0);
+  expect(reading.farEarly).toBe(0);
+});
+
+test('reduced motion shows the whole surface at once, with no wave (#453)', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // A wave would stand at nothing for the whole test.
+  await holdRevealWaveFromStart(page, 0);
+  await page.addInitScript(() => {
+    const states: string[] = [];
+    (window as Window & { __atlasWaveStates?: string[] }).__atlasWaveStates =
+      states;
+    new MutationObserver(() => {
+      const explorer = document.querySelector('.atlas-explorer');
+      const state = explorer?.getAttribute('data-atlas-wave');
+      if (state && states.at(-1) !== state) states.push(state);
+    }).observe(document, {
+      attributeFilter: ['data-atlas-wave'],
+      attributes: true,
+      subtree: true,
+    });
+  });
+  const render = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.goto(`/app/?${SURFACE_ONLY}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect.poll(() => render.hits(), { timeout: 30_000 }).toBe(1);
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'pending');
+  await cameraAtRest(page);
+  const view = await globeView(page);
+  const before = await waveFrame(page);
+
+  render.release();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  await renderedFrames(page);
+  const shown = await waveFrame(page);
+  const reading = await readWave(
+    page,
+    { before, done: shown, early: shown },
+    view,
+  );
+  expect(reading.centreEarly).toBeGreaterThan(0);
+  expect(reading.far).toBeGreaterThan(0);
+  expect(reading.farEarly).toBe(reading.far);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __atlasWaveStates?: string[] }).__atlasWaveStates,
+    ),
+  ).toEqual(['pending', 'done']);
+  expect(
+    await page.evaluate(
+      () => performance.getEntriesByName('atlas:reveal-wave').length,
+    ),
+  ).toBe(0);
+});
+
+/** Early enough that the ring is well inside "far" even when the wave runs to the horizon. */
+const UNREACHED_PROGRESS = 0.2;
+
+test('hexagons the wave has not reached cannot be hovered (#453)', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  // Close enough for hexagons several pixels wide. The cold reveal runs at the home view, so
+  // this wave is a dataset switch's, started once the camera has flown in.
+  await page.goto(`/app/?${cellCamera(4_000_000, { geometry: 'hexagons' })}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  await cameraAtRest(page);
+  await holdRevealWave(page, 0);
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await expect(explorer).toHaveAttribute(
+    'data-atlas-active',
+    'g6pd-deficiency',
+    { timeout: 45_000 },
+  );
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'running');
+  await expect(
+    page.locator('[role="option"][data-map-id="g6pd-deficiency"]'),
+  ).toBeHidden();
+  await renderedFrames(page);
+  const box = (await page
+    .locator('.atlas-scene canvas')
+    .first()
+    .boundingBox())!;
+  // The globe fills this view; "far" is half way from the centre to a corner. The wave starts
+  // where the view ray meets the globe, which desktop draws in the open area beside the controls
+  // (#452).
+  const view = {
+    centre: await globeViewCentre(page),
+    farFrom: Math.hypot(box.width, box.height) / 4,
+    near: 3,
+  };
+  const before = await waveFrame(page);
+  // Nearly at its end the wave has grown every visible hexagon (stepping back is test-only).
+  await holdRevealWave(page, 0.9999);
+  const grown = await waveFrame(page);
+  // On desktop the drawn view axis sits 234 px right of the canvas centre (#452). By the
+  // camera's geometry, at 4,000 km the canvas's left edge, under the controls panel, then shows
+  // sky past the limb, so the wave runs to the horizon (about 53°, drawn about 860 px from the
+  // view axis) instead of the view's edge (about 30°). The wave is timed on screen (#453,
+  // 2026-10-14): at 20% its leading edge lies about 230 px out, well inside "far" (about 357 px),
+  // and the centre hexagon is fully grown.
+  await holdRevealWave(page, UNREACHED_PROGRESS);
+  const early = await waveFrame(page);
+  const reading = await readWave(page, { before, done: grown, early }, view);
+  expect(reading.centreEarly).toBeGreaterThan(0);
+  expect(reading.far).toBeGreaterThan(0);
+  expect(reading.farEarly).toBe(0);
+  expect(reading.farPoint).not.toBeNull();
+
+  const preview = page.locator('.atlas-hover-preview');
+  const far = reading.farPoint!;
+  await page.mouse.move(far.x, far.y);
+  await renderedFrames(page);
+  await page.waitForTimeout(500);
+  await expect(preview).toBeHidden();
+  await page.mouse.move(view.centre.x, view.centre.y);
+  await expect(preview).toBeVisible();
+
+  await holdRevealWave(page, null);
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+  await page.mouse.move(far.x, far.y);
+  await expect(preview).toBeVisible();
+});
+
+test('the cold wave runs once, and the post-reveal loads arrive during or after it (#450, #453)', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // The wave starts with the first chunk (§B.6.7) and the load order starts the borders at
+  // surface-visible (§B.6.9). Whether they land during the wave or after it depends on how long
+  // the chunked reveal takes; either way none arrives before the wave has started, neither the
+  // borders nor the detail tier restarts it, and cell outlines are built once it has passed.
+  const catalog = await readInlineCatalog(page);
+  const borders = contextSourceKey(
+    catalog as unknown as AtlasCatalog,
+    NATURAL_EARTH_BORDERS,
+  );
+  const detail = artifactTierKey(catalog, 'hbs-rs334', 'detail');
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  for (const attribute of [
+    'data-atlas-values-ready',
+    'data-atlas-context-ready',
+    'data-atlas-edges-ready',
+  ])
+    await expect(explorer).toHaveAttribute(attribute, 'true', {
+      timeout: 45_000,
+    });
+  await expect(explorer).toHaveAttribute('data-atlas-wave', 'done');
+
+  const timing = await page.evaluate(
+    ({ borders, detail }) => {
+      const resources = (key: string) =>
+        (
+          performance.getEntriesByType(
+            'resource',
+          ) as PerformanceResourceTiming[]
+        )
+          .filter((entry) => new URL(entry.name).pathname.endsWith(`/${key}`))
+          .map((entry) => ({ end: entry.responseEnd, start: entry.startTime }));
+      return {
+        borders: resources(borders),
+        detail: resources(detail),
+        edges:
+          performance.getEntriesByName('atlas:edges-ready')[0]?.startTime ??
+          null,
+        waves: performance
+          .getEntriesByName('atlas:reveal-wave')
+          .map((entry) => ({
+            end: entry.startTime + entry.duration,
+            start: entry.startTime,
+          })),
+      };
+    },
+    { borders, detail },
+  );
+  expect(timing.waves).toHaveLength(1);
+  const [wave] = timing.waves;
+  expect(timing.borders).toHaveLength(1);
+  expect(timing.detail).toHaveLength(1);
+  expect(timing.borders[0].end).toBeLessThanOrEqual(timing.detail[0].start);
+  expect(timing.borders[0].end).toBeGreaterThanOrEqual(wave.start);
+  expect(timing.detail[0].end).toBeGreaterThanOrEqual(wave.start);
+  expect(timing.edges).not.toBeNull();
+  expect(timing.edges!).toBeGreaterThanOrEqual(wave.end);
+});
+
+test('style choices in the URL reach the scene that renders them', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/?metric=post_sd');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(
+    page.getByRole('complementary', { name: 'Map legend' }),
+  ).toContainText('Model uncertainty');
+});
+
+// An open inspector never shows the previous artifact's numbers after a dataset switch.
+test('switching dataset closes the inspector instead of keeping the old artifact’s cell', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered on desktop',
+  );
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearGlobeCentre(page, 'click', inspector);
+  await expect(inspector).toBeVisible();
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await expect(explorer).toHaveAttribute(
+    'data-atlas-active',
+    'g6pd-deficiency',
+    {
+      timeout: 45_000,
+    },
+  );
+  await expect(inspector).toBeHidden();
+});
+
+const GLOBE_CENTRE_OFFSETS = [
+  [0, 0],
+  [-18, 0],
+  [18, 0],
+  [0, -18],
+  [0, 18],
+  [-18, -18],
+  [18, -18],
+  [-18, 18],
+  [18, 18],
+] as const;
+const SUPPORT_LABEL = /observed|interpolated|Mostly model assumptions|unknown/;
+const DISPLAYED_VALUE = /\d+\.\d{2}%/;
+/** A readout with no "≈" in front of it; only the f64 detail tier may print one (spec §B.2). */
+const UNMARKED_VALUE = /(?<![≈\d.])\d+\.\d{2}%/;
+const EXACT_VALUE = /^\d+\.\d{2}%$/;
+const EXACT_INTERVAL = /^\d+\.\d{2}%–\d+\.\d{2}%$/;
+/** A render-tier readout in the hover: the "≈" marker, then the exact format (§B.2, amended 2026-10-13). */
+const PROVISIONAL_VALUE = /^≈\d+\.\d{2}%$/;
+/** The same in the inspector, followed by its visually hidden note for assistive technology. */
+function provisionalWithNote(state: 'loading' | 'unavailable'): RegExp {
+  return new RegExp(
+    `^≈\\d+\\.\\d{2}% \\(approximate; exact value ${state}\\)$`,
+  );
+}
+// Hex lookarounds, not \b: an id can abut neighbouring text with no word boundary between them.
+const CELL_ID = /(?<![0-9a-f])[0-9a-f]{15}(?![0-9a-f])/;
+/**
+ * Every production build aborts a fetch that sends no data for this long (fast-load design §B.2).
+ * Only `build:e2e` stretches the window, to 120 s (`PUBLIC_ATLAS_REQUEST_STALL_MS`, Task 67 (B5.1)).
+ */
+const PRODUCTION_REQUEST_STALL_MS =
+  StaticAtlasDataProvider.defaultRequestStallMs;
+/** Time for a production-window stall abort to reach the inspector before the hold is read. */
+const STALL_ABORT_SETTLE_MS = 2_000;
+const HELD_PAST_PRODUCTION_STALL =
+  'the provider aborted the held detail tier at the production stall window (build with npm run build:e2e)';
+
+/**
+ * Points near a surface cell just west of the camera target, which desktop draws in the open area
+ * beside the controls, so the inspector that opens in the right rail never covers the pointer
+ * (#452).
+ */
+async function pointNearGlobeCentre(
+  page: Page,
+  action: 'move' | 'click',
+  until: Locator,
+): Promise<void> {
+  await waitForRevealWave(page);
+  const centre = await besideGlobeCentre(page);
+  for (const [offsetX, offsetY] of GLOBE_CENTRE_OFFSETS) {
+    const x = centre.x + offsetX;
+    const y = centre.y + offsetY;
+    if (action === 'move') await page.mouse.move(x, y);
+    else await page.mouse.click(x, y);
+    if (await until.isVisible()) return;
+  }
+}
+
+/** The `<dd>` of the value row labelled exactly `label`. */
+function valueRow(container: Locator, label: string): Locator {
+  return container
+    .locator('dl > div')
+    .filter({
+      has: container.page().locator('dt', {
+        hasText: new RegExp(`^${label}$`),
+      }),
+    })
+    .locator('dd');
+}
+
+/** A readout's value in hundredths of a percent, e.g. "≈12.35% (…)" → 1235. */
+async function readoutHundredths(value: Locator): Promise<number> {
+  const match = (await value.textContent())?.match(/(\d+)\.(\d{2})%/);
+  expect(match, 'a percent readout').not.toBeNull();
+  return Number(match![1]) * 100 + Number(match![2]);
+}
+
+async function openSurfaceOnlyView(page: Page): Promise<void> {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
+}
+
+test('surface hover and inspector show marked render values until the detail tier loads', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const detail = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'detail',
+    Number.POSITIVE_INFINITY,
+  );
+  await openSurfaceOnlyView(page);
+  const explorer = page.locator('.atlas-explorer');
+  await expect.poll(() => detail.hits(), { timeout: 30_000 }).toBe(1);
+  const heldSince = Date.now();
+  await expect(explorer).not.toHaveAttribute('data-atlas-values-ready', 'true');
+
+  const hoverPreview = page.locator('.atlas-hover-preview');
+  await pointNearGlobeCentre(page, 'move', hoverPreview);
+  await expect(valueRow(hoverPreview, 'Posterior')).toHaveText(
+    PROVISIONAL_VALUE,
+  );
+  await expect(valueRow(hoverPreview, '95% credible range')).toHaveText(
+    'Loading…',
+  );
+  await expect(valueRow(hoverPreview, 'Uncertainty')).toHaveText(
+    PROVISIONAL_VALUE,
+  );
+  await expect(hoverPreview).toContainText(SUPPORT_LABEL);
+  await expect(hoverPreview).not.toContainText(UNMARKED_VALUE);
+
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearGlobeCentre(page, 'click', inspector);
+  await expect(inspector).toBeVisible();
+  await expect(valueRow(inspector, 'Posterior estimate')).toHaveText(
+    provisionalWithNote('loading'),
+  );
+  await expect(valueRow(inspector, '95% credible interval')).toHaveText(
+    'Loading…',
+  );
+  await expect(valueRow(inspector, 'Uncertainty')).toHaveText(
+    provisionalWithNote('loading'),
+  );
+  await expect(valueRow(inspector, 'Nearest measurement')).toHaveText(
+    'Loading…',
+  );
+  // The marker is what sighted readers get; the note is for assistive technology only.
+  await expect(valueRow(inspector, 'Posterior estimate')).toMatchAriaSnapshot(
+    '- definition: /^≈\\d+\\.\\d{2}% \\(approximate; exact value loading\\)$/',
+  );
+  const note = await valueRow(inspector, 'Posterior estimate')
+    .locator('.visually-hidden')
+    .boundingBox();
+  expect(note!.width * note!.height).toBeLessThanOrEqual(1);
+  await expect(inspector).toContainText('Loading cell values…');
+  await expect(inspector).toContainText(SUPPORT_LABEL);
+  await expect(inspector).not.toContainText(UNMARKED_VALUE);
+  const cellId = (await inspector.innerText()).match(CELL_ID)?.[0];
+  expect(cellId).toBeDefined();
+  const inspectorNode = await inspector.elementHandle();
+
+  // Keep the detail tier held past the production stall window before releasing it. A build without
+  // build:e2e's 120 s override has aborted the one held fetch by now and shows "Cell values
+  // unavailable", so this would turn into a test of the unavailable state. The provider arms its
+  // stall timer before the route sees the request, so by the read below that timer has run for at
+  // least the production window plus the settle margin.
+  await page.waitForTimeout(
+    Math.max(
+      0,
+      heldSince +
+        PRODUCTION_REQUEST_STALL_MS +
+        STALL_ABORT_SETTLE_MS -
+        Date.now(),
+    ),
+  );
+  const heldText = await inspector.innerText();
+  expect(heldText, HELD_PAST_PRODUCTION_STALL).not.toContain(
+    'Cell values unavailable',
+  );
+  expect(heldText, HELD_PAST_PRODUCTION_STALL).toContain(
+    'Loading cell values…',
+  );
+  expect(detail.hits(), HELD_PAST_PRODUCTION_STALL).toBe(1);
+  // The pointer has not moved since the click, so the hover and the inspector keep their cells.
+  const provisional = {
+    hoverMean: await readoutHundredths(valueRow(hoverPreview, 'Posterior')),
+    hoverSd: await readoutHundredths(valueRow(hoverPreview, 'Uncertainty')),
+    mean: await readoutHundredths(valueRow(inspector, 'Posterior estimate')),
+    sd: await readoutHundredths(valueRow(inspector, 'Uncertainty')),
+  };
+  detail.release();
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 30_000,
+  });
+  await expect(valueRow(inspector, 'Posterior estimate')).toHaveText(
+    EXACT_VALUE,
+  );
+  await expect(valueRow(inspector, '95% credible interval')).toHaveText(
+    EXACT_INTERVAL,
+  );
+  await expect(valueRow(inspector, 'Uncertainty')).toHaveText(EXACT_VALUE);
+  await expect(valueRow(inspector, 'Nearest measurement')).toHaveText(
+    /^\d+ km$/,
+  );
+  await expect(inspector).not.toContainText('≈');
+  await expect(inspector).not.toContainText('Loading');
+  await expect(inspector).toContainText(cellId!);
+  expect(await inspectorNode!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(valueRow(hoverPreview, 'Posterior')).toHaveText(EXACT_VALUE);
+  await expect(valueRow(hoverPreview, '95% credible range')).toHaveText(
+    EXACT_INTERVAL,
+  );
+  await expect(valueRow(hoverPreview, 'Uncertainty')).toHaveText(EXACT_VALUE);
+  await expect(hoverPreview).not.toContainText('≈');
+  // Each provisional readout was its cell's float32 value: at most one unit off in the last digit.
+  const exact = {
+    hoverMean: await readoutHundredths(valueRow(hoverPreview, 'Posterior')),
+    hoverSd: await readoutHundredths(valueRow(hoverPreview, 'Uncertainty')),
+    mean: await readoutHundredths(valueRow(inspector, 'Posterior estimate')),
+    sd: await readoutHundredths(valueRow(inspector, 'Uncertainty')),
+  };
+  for (const key of Object.keys(exact) as (keyof typeof exact)[])
+    expect(Math.abs(exact[key] - provisional[key]), key).toBeLessThanOrEqual(1);
+  expect(detail.hits()).toBe(1);
+  expect(pageErrors).toEqual([]);
+});
+
+test('surface values report an unavailable detail tier and recover on retry', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const failure = await failArtifactTier(page, 'hbs-rs334', 'detail');
+  await openSurfaceOnlyView(page);
+  await expect
+    .poll(() => failure.hits(), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(1);
+
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearGlobeCentre(page, 'click', inspector);
+  await expect(inspector).toContainText('Cell values unavailable', {
+    timeout: 20_000,
+  });
+  await expect(valueRow(inspector, 'Posterior estimate')).toHaveText(
+    provisionalWithNote('unavailable'),
+  );
+  await expect(valueRow(inspector, '95% credible interval')).toHaveText(
+    'Unavailable',
+  );
+  await expect(valueRow(inspector, 'Uncertainty')).toHaveText(
+    provisionalWithNote('unavailable'),
+  );
+  await expect(valueRow(inspector, 'Nearest measurement')).toHaveText(
+    'Unavailable',
+  );
+  await expect(inspector).not.toContainText(UNMARKED_VALUE);
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-ready',
+    'true',
+  );
+
+  await failure.restore();
+  await inspector.getByRole('button', { name: /retry/i }).click();
+  // The retry button unmounts once the tier is loading again; focus moves to Close, never <body>.
+  await expect(
+    inspector.getByRole('button', { name: 'Close inspector' }),
+  ).toBeFocused();
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-values-ready',
+    'true',
+    { timeout: 30_000 },
+  );
+  await expect(valueRow(inspector, 'Posterior estimate')).toHaveText(
+    EXACT_VALUE,
+  );
+  await expect(valueRow(inspector, '95% credible interval')).toHaveText(
+    EXACT_INTERVAL,
+  );
+  await expect(inspector).toContainText(DISPLAYED_VALUE);
+  await expect(inspector).not.toContainText('≈');
+  expect(pageErrors).toEqual([]);
+});
+
+test('a corrupted render object shows Retry data and renders nothing', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  await page.goto('/app/');
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
+  await expect.poll(() => displayedArtifactIds(page)).toEqual([]);
+  await page.waitForTimeout(1_000);
+  expect(await displayedArtifactIds(page)).toEqual([]);
+  expect(corruption.hits()).toBeGreaterThanOrEqual(1);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+  await expect.poll(() => displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a metric change during a cold load never marks a failing map ready', async ({
+  page,
+  isMobile,
+}) => {
+  // The phone keeps the metric control in a collapsed sheet; the scene path is the same.
+  test.skip(isMobile, 'desktop exposes the metric radios without a sheet');
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  // Registered first, so it answers after the hold releases: a render tier that fails validation.
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  const render = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  const observations = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'observations',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer.locator('.atlas-scene canvas')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect.poll(() => render.hits(), { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => observations.hits(), { timeout: 30_000 }).toBe(1);
+  // The scene receives the pending request a few frames after it starts.
+  await page.waitForTimeout(2_000);
+  // Nothing is displayed, so the scene rebuilds the pending request with the new metric. The
+  // first request is still waiting on its observations when the render tier fails: once they
+  // arrive it finds itself superseded, and only the rebuild sees the failure.
+  await page.getByRole('radio', { name: 'Uncertainty' }).check();
+  render.release();
+  await page.waitForTimeout(1_000);
+  observations.release();
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  await page.waitForTimeout(1_000);
+  expect(await explorer.getAttribute('data-atlas-ready')).toBe('false');
+  expect(corruption.hits()).toBeGreaterThanOrEqual(1);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a corrupted detail object removes the map and offers Retry data', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'detail');
+  // The detail tier loads after the reveal (fast-load design §B.2). Holding the corrupted body until
+  // the surface and its cell edges are shown makes this a test of their removal, not of a surface
+  // that never finished.
+  const detail = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'detail',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.goto('/app/');
+
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-edges-ready', 'true', {
+    timeout: 30_000,
+  });
+  await expect.poll(() => detail.hits(), { timeout: 30_000 }).toBe(1);
+  // The cell values wait on the held tier: only a detail tier that passes validation marks them ready.
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'false');
+
+  detail.release();
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  expect(corruption.hits()).toBe(1);
+  // §B.2: the surface and support layers are removed and the map is marked not ready. The cell
+  // edges belong to the surface, so their mark is withdrawn with it (`data-atlas-surface-visible` is
+  // a one-shot load mark and stays set). The observations are not part of the removal, so
+  // `data-atlas-displayed` keeps hbs-rs334, unlike a corrupted render object, which renders nothing.
+  await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
+  await expect(explorer).toHaveAttribute('data-atlas-edges-ready', 'false');
+  // Stable for 1 s: nothing brings the edges back or marks the failed tier's values ready.
+  await page.waitForTimeout(1_000);
+  expect(await explorer.getAttribute('data-atlas-ready')).toBe('false');
+  expect(await explorer.getAttribute('data-atlas-edges-ready')).toBe('false');
+  expect(await explorer.getAttribute('data-atlas-values-ready')).toBe('false');
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true');
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a browser that cannot start the data worker gets Retry data, not an endless load', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  await page.addInitScript(() => {
+    // Firefox before 114 has no module workers, and a strict CSP `worker-src` blocks them; Cesium's
+    // own classic workers keep working.
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        if (String(url).includes('atlas-data')) {
+          throw new Error('module workers are unavailable');
+        }
+        super(url, options);
+      }
+    };
+  });
+  await page.goto('/app/');
+  await expect(page.getByRole('button', { name: 'Retry data' })).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-explorer')).not.toHaveAttribute(
+    'data-atlas-ready',
+    'true',
+  );
+  expect(errors).toEqual([]);
+});
+
+test('Retry data recovers once the render object is served intact again', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const corrupt = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  await page.goto('/app/');
+  const retry = page.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible({ timeout: 45_000 });
+  await corrupt.restore();
+  await retry.click();
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect.poll(() => displayedArtifactIds(page)).toEqual(['hbs-rs334']);
 });

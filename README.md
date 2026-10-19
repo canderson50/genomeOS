@@ -2,9 +2,9 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
-[![Coverage](https://raw.githubusercontent.com/bschilder/genomeOS/main/website/public/_static/coverage.svg)](https://github.com/bschilder/genomeOS/blob/main/website/public/_static/coverage.svg)
-[![CI](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
-[![Package: v0.1.0](https://img.shields.io/badge/package-v0.1.0-2496ED?logo=docker&logoColor=white)](https://github.com/users/bschilder/packages/container/package/genomeos)
+[![Coverage](https://raw.githubusercontent.com/genomeOS/genomeOS/main/website/public/_static/coverage.svg)](https://github.com/genomeOS/genomeOS/blob/main/website/public/_static/coverage.svg)
+[![CI](https://github.com/genomeOS/genomeOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/genomeOS/genomeOS/actions/workflows/ci.yml)
+[![Package: v0.1.0](https://img.shields.io/badge/package-v0.1.0-2496ED?logo=docker&logoColor=white)](https://github.com/orgs/genomeOS/packages/container/package/genomeos)
 
 <!-- Coverage is measured locally; scripts/render_coverage_badge.py updates the linked first-party SVG.
      Version badges follow project.version; docker.yml publishes the matching v-prefixed tag. -->
@@ -102,8 +102,24 @@ background; there is a glossary at the end.
 | [Pan-UKB architecture](docs/panukb-architecture.md) | The serving model for the GWAS evidence layer |
 | [Board conventions](docs/board-conventions.md) | Labels, priorities, milestones, automation |
 | [Deployment guide](docs/deployment-gcp.md) · [gcloud wrapper](docs/repo-gcloud-auth.md) | GCP operations |
-| [Dataset assessment (#3)](https://github.com/bschilder/genomeOS/issues/3) | Every candidate data source, scored — the upstream document for the whole design |
-| [Prior art review (#4)](https://github.com/bschilder/genomeOS/discussions/4) | Everything that has tried this before, and what is genuinely unbuilt |
+| [Data store](docs/data-store.md) | Where the data lives (a public bucket, not git) and how to fetch and verify it |
+| [Dataset assessment (#3)](https://github.com/genomeOS/genomeOS/issues/3) | Every candidate data source, scored — the upstream document for the whole design |
+| [Prior art review (#4)](https://github.com/genomeOS/genomeOS/discussions/4) | Everything that has tried this before, and what is genuinely unbuilt |
+
+## Getting the data
+
+The data is open: the fitted surfaces, validation evidence and curated inputs are in a public data
+store at `https://storage.googleapis.com/genomeos-atlas-data/`, with no credentials needed. Git keeps only a checksummed manifest per release
+(`data/releases/`); the store's own copy is at `manifests/<release>.json` under that URL. Clone
+without the historical data blobs, then fetch what you need:
+
+```bash
+git clone --filter=blob:none https://github.com/genomeOS/genomeOS.git && cd genomeOS
+python scripts/fetch_data.py                 # every file sha256-verified against the manifest
+```
+
+Details, including what is not published yet (trained models, raw third-party harvests), are in
+[the data store guide](docs/data-store.md).
 
 ## Contributing
 
@@ -111,13 +127,13 @@ Contributors from every background are welcome — this needs population genetic
 statisticians, clinical geneticists, data and frontend engineers, governance expertise, and
 people who can open doors to datasets.
 
-1. **Introduce yourself** in [Discussions](https://github.com/bschilder/genomeOS/discussions/76).
+1. **Introduce yourself** in [Discussions](https://github.com/genomeOS/genomeOS/discussions/76).
 2. **Read [the overview](docs/overview.md)**, which ends with a per-skill list of the issues
    that actually block progress.
-3. **Check [the issues](https://github.com/bschilder/genomeOS/issues?q=is%3Aissue)** — open
+3. **Check [the issues](https://github.com/genomeOS/genomeOS/issues?q=is%3Aissue)** — open
    *and* closed. Open issues are the work queue; closed ones record what was already done and
    what was considered and rejected, so search before starting anything.
-4. **Pick something up** from the [project board](https://github.com/users/bschilder/projects/8).
+4. **Pick something up** from the [project board](https://github.com/orgs/genomeOS/projects/1).
    Filter by `skill:*` to find what you can do; `Ready` means fully specified and unblocked, so
    take it without asking.
 
@@ -137,17 +153,17 @@ dataset scores, and the statistics are actively wanted.
 
 ## Run the published container
 
-The public [genomeOS package on GitHub Container Registry](https://github.com/users/bschilder/packages/container/package/genomeos)
+The public [genomeOS package on GitHub Container Registry](https://github.com/orgs/genomeOS/packages/container/package/genomeos)
 provides native `linux/amd64` and `linux/arm64` images and does not require a GitHub login. To run
 the latest image whose `main` commit passed CI:
 
 ```bash
-docker pull ghcr.io/bschilder/genomeos:latest
+docker pull ghcr.io/genomeos/genomeos:latest
 docker run --rm --read-only --tmpfs /tmp \
   -e DATABASE_URL=sqlite:////tmp/genomeos.db \
   -e ATLAS_ARTIFACT_ROOT=/app/demo/artifacts \
   -p 127.0.0.1:8000:8080 \
-  ghcr.io/bschilder/genomeos:latest
+  ghcr.io/genomeos/genomeos:latest
 ```
 
 In another terminal, check readiness and open the diagnostic preview:
@@ -157,16 +173,22 @@ curl http://127.0.0.1:8000/ready
 open http://127.0.0.1:8000/preview  # macOS; use xdg-open on Linux
 ```
 
-For a reproducible run, pin the image to the seven-character commit tag instead of `latest`:
+For a reproducible run, pin the image to a seven-character commit tag (the package page lists
+them) instead of `latest`. Replace `sha-xxxxxxx` below with one of those tags:
 
 ```bash
-docker pull ghcr.io/bschilder/genomeos:sha-813edd0
+TAG=sha-xxxxxxx
+docker pull "ghcr.io/genomeos/genomeos:$TAG"
 docker run --rm --read-only --tmpfs /tmp \
   -e DATABASE_URL=sqlite:////tmp/genomeos.db \
   -e ATLAS_ARTIFACT_ROOT=/app/demo/artifacts \
   -p 127.0.0.1:8000:8080 \
-  ghcr.io/bschilder/genomeos:sha-813edd0
+  "ghcr.io/genomeos/genomeos:$TAG"
 ```
+
+Images published before the repository moved to the genomeOS organization (for example
+`sha-813edd0`) were not copied and stay pullable at their old address,
+`ghcr.io/bschilder/genomeos`.
 
 `latest` advances only after the required CI workflow succeeds on `main`; `sha-...` tags do not
 move. Each multi-architecture manifest includes OCI revision metadata, an SBOM, and provenance

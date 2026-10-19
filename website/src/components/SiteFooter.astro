@@ -1,13 +1,37 @@
 ---
-import GitHubLink from './GitHubLink.astro';
 import BrandName from './BrandName.astro';
+import CookieSettings from './CookieSettings.astro';
+import GitHubLink from './GitHubLink.astro';
+import { sitePath } from '../lib/paths';
 
 const year = new Date().getFullYear();
 ---
 
 <footer class="site-footer">
   <div class="site-footer__inner">
-    <p>© {year} <BrandName /></p>
+    <div class="site-footer__brand">
+      <img
+        class="site-footer__logo"
+        src={sitePath('/brand/genomeos-foundation-dark.min.svg')}
+        width="1380"
+        height="435"
+        alt="genomeOS Foundation: open science for the benefit of all"
+        loading="lazy"
+        decoding="async"
+      />
+      <p>© {year} <BrandName foundation /></p>
+    </div>
+    {
+      /* Contact leads the footer's links (Contact page spec §1). It is not a policy, so it stands
+         beside the Site policies nav rather than in it. */
+    }
+    <div class="site-footer__links-row">
+      <a class="site-footer__contact" href={sitePath('/contact/')}>Contact</a>
+      <nav class="site-footer__links" aria-label="Site policies">
+        <a href={sitePath('/privacy/')}>Privacy</a>
+        <CookieSettings class="site-footer__button" />
+      </nav>
+    </div>
     <GitHubLink />
   </div>
 </footer>

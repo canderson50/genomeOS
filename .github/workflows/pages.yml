@@ -6,10 +6,18 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/pages.yml"
+      - "deploy/atlas-web-cors.json"
+      - "genomeos/publication/**"
+      - "scripts/check_atlas_web_data.py"
+      - "requirements.lock"
   pull_request:
     paths:
       - "website/**"
       - ".github/workflows/pages.yml"
+      - "deploy/atlas-web-cors.json"
+      - "genomeos/publication/**"
+      - "scripts/check_atlas_web_data.py"
+      - "requirements.lock"
   workflow_dispatch:
 
 permissions:
@@ -32,6 +40,9 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install exact dependencies
         run: npm ci
       - name: Check formatting
@@ -44,19 +55,33 @@ jobs:
         run: npm run build
       - name: Check custom-domain links
         run: npm run check:links -- dist /
+      - name: Check published Atlas web data
+        # Same-repository runs only: fork pull requests do not receive repository variables.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: python ../scripts/check_atlas_web_data.py --catalog public/data/atlas/catalog.json --base "$ATLAS_DATA_BASE_URL" --bucket "$ATLAS_DATA_BUCKET" --dist dist
+        env:
+          ATLAS_DATA_BASE_URL: ${{ vars.ATLAS_DATA_BASE_URL }}
+          ATLAS_DATA_BUCKET: ${{ vars.ATLAS_DATA_BUCKET }}
       - name: Build GitHub project-site fallback
         run: npm run build:fallback
       - name: Check fallback links
         run: npm run check:links -- dist-fallback /genomeOS/
-      - name: Install browser runtime
-        run: npx playwright install --with-deps chromium
-      - name: Run browser and accessibility contracts
-        run: npm run test:e2e
 
-  build:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: validate
+  # Browser and accessibility contracts, split by test across four runners that start alongside
+  # validate. One worker per shard: software WebGL saturates a 4-vCPU runner (#411).
+  # This job builds the site itself, so its steps before "Install browser runtime" must stay
+  # identical to validate's steps before "Check formatting" (website/tests/pages-workflow.test.ts).
+  e2e:
+    name: e2e (shard ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        total: [4]
+    defaults:
+      run:
+        working-directory: website
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -64,17 +89,104 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+      - name: Run browser and accessibility contracts
+        run: npm run test:e2e -- --fully-parallel --shard=${{ matrix.shard }}/${{ matrix.total }}
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-shard-${{ matrix.shard }}
+          path: website/test-results
+          retention-days: 7
+
+  # The marketing pages' performance budgets (site redesign spec §7, #454 ruling 13), measured on
+  # the deployed build: an analytics id is set, so the cookie control ships as it does live, and
+  # Google Analytics itself never loads (consent is declined). Byte, LCP and CLS budgets all hold
+  # here; should runner noise ever fail the timing ones, PERF_TIMING: log on the budgets step logs
+  # them instead (marketing-performance.spec.ts). Like the shards, its steps before "Install
+  # browser runtime" stay identical to validate's steps before "Check formatting".
+  performance:
+    name: performance budgets
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+      - name: Build the deployed site
+        run: npm run build:deployed
+      - name: Run the marketing performance budgets
+        run: npm run test:performance:marketing
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-performance-results
+          path: website/test-results
+          retention-days: 7
+
+  build:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [validate, e2e, performance]
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_ATLAS_DATA_BASE_URL: ${{ vars.ATLAS_DATA_BASE_URL }}
+      ATLAS_DATA_BUCKET: ${{ vars.ATLAS_DATA_BUCKET }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install exact dependencies
         run: npm ci
         working-directory: website
+      - name: Refuse a production build without published Atlas data
+        run: |
+          if [ -z "$PUBLIC_ATLAS_DATA_BASE_URL" ]; then
+            echo "::error::Repository variable ATLAS_DATA_BASE_URL is not set (design 2026-10-07 §C.1.4)."
+            exit 1
+          fi
+          if [ -n "${ATLAS_CATALOG_PATH:-}" ]; then
+            echo "::error::ATLAS_CATALOG_PATH is a test-only override; production inlines the repository catalog."
+            exit 1
+          fi
       - name: Build production site
         run: npm run build
         working-directory: website
         env:
           CESIUM_TOKEN: ${{ secrets.CESIUM_TOKEN }}
           GOOGLE_MAPS_TOKEN: ${{ secrets.GOOGLE_MAPS_TOKEN }}
+          # Google Analytics 4 (#422): only this build reports. Unset, the site loads no analytics.
+          PUBLIC_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
       - name: Refuse broken production links
         run: npm run check:links -- dist /
+        working-directory: website
+      - name: Refuse unpublished Atlas web data
+        run: python ../scripts/check_atlas_web_data.py --production --catalog public/data/atlas/catalog.json --base "$PUBLIC_ATLAS_DATA_BASE_URL" --bucket "$ATLAS_DATA_BUCKET" --dist dist
         working-directory: website
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v4

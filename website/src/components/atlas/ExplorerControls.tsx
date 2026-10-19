@@ -1,5 +1,7 @@
 /** Accessible explorer controls for Atlas design §11. */
 
+import { createPortal } from 'react-dom';
+
 import type { AtlasCatalog, ExternalInfo } from '../../atlas/contracts';
 import type {
   ObservationColorVariable,
@@ -8,6 +10,7 @@ import type {
   ObservationSizeVariable,
 } from '../../atlas/observation-encoding';
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
+import { dataHref } from '../../lib/data-url';
 import type {
   BasemapId,
   EdgeColorMode,
@@ -18,19 +21,26 @@ import type {
   TerrainId,
 } from '../../atlas/url-state';
 import type { Metric, PaletteId } from '../../atlas/visual-encoding';
+import { ControlsSheet } from './ControlsSheet';
 import { InfoTip } from './InfoTip';
 import { ExternalInfoPanel } from './ExternalInfoPanel';
 import { InferredSurfaceControls } from './InferredSurfaceControls';
 import { MapStyleControls } from './MapStyleControls';
 import { MapCatalogPicker } from './MapCatalogPicker';
 import { ObservationControls } from './ObservationControls';
+import { ExplorerHeading } from './ExplorerHeading';
+import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
 
 interface ExplorerControlsProps {
   capabilities: SceneCapabilities;
   catalog: AtlasCatalog;
-  dataBaseUrl: string;
+  artifactDataBase: string;
   state: ExplorerState;
   disabled: boolean;
+  explorer: HTMLElement | null;
+  /** Receives the controls panel element (`ControlsSheet`). */
+  panelRef?: (node: HTMLElement | null) => void;
+  topSlot: HTMLElement | null;
   onBasemap: (value: BasemapId) => void;
   onBasemapBrightness: (value: number) => void;
   onBasemapOpacity: (value: number) => void;
@@ -93,9 +103,12 @@ const layerDescriptions: Record<LayerId, string> = {
 export function ExplorerControls({
   capabilities,
   catalog,
-  dataBaseUrl,
+  artifactDataBase,
   state,
   disabled,
+  explorer,
+  panelRef,
+  topSlot,
   onBasemap,
   onBasemapBrightness,
   onBasemapOpacity,
@@ -135,36 +148,61 @@ export function ExplorerControls({
   );
   const observationsAvailable =
     selectedArtifact?.observations_available !== false;
-  const downloadUrl = (path: string) =>
-    `${dataBaseUrl.endsWith('/') ? dataBaseUrl : `${dataBaseUrl}/`}${path.replace(/^\/+/, '')}`;
+  const downloadUrl = (key: string) => dataHref(key, artifactDataBase);
+  const sheetSummary = `${selectedArtifact?.label ?? state.entityId} · ${
+    state.metric === 'post_mean' ? 'Posterior estimate' : 'Uncertainty'
+  }`;
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const topSlotTarget = isMobile ? topSlot : null;
+  const datasetTip = (
+    <InfoTip carryKey="dataset-tip" label="map selection">
+      Choose a versioned genetic variant, allele, gene, or phenotype map from
+      the public <span className="brand-name">genomeOS</span> catalog.
+    </InfoTip>
+  );
+  const picker = (
+    <MapCatalogPicker
+      catalog={catalog}
+      disabled={disabled}
+      selectedId={state.entityId}
+      onSelect={onEntity}
+    />
+  );
 
   return (
-    <aside className="atlas-controls" aria-label="Explorer controls">
+    <ControlsSheet
+      explorer={explorer}
+      panelRef={panelRef}
+      peekExtra={topSlotTarget ? datasetTip : undefined}
+      summary={sheetSummary}
+    >
       <div className="atlas-controls__intro">
         <p className="atlas-kicker atlas-kicker--brand">
           <span className="brand-name">genomeOS</span> Atlas
         </p>
-        <h1>Explore human genetic variation</h1>
+        {!topSlotTarget && <ExplorerHeading />}
         <p>
           Visualize measured and predicted allele frequencies across the world
         </p>
       </div>
 
-      <div className="atlas-field atlas-field--entity">
-        <span className="atlas-field__title">
-          <span>Select dataset</span>
-          <InfoTip label="map selection">
-            Choose a versioned genetic variant, allele, gene, or phenotype map
-            from the public genomeOS catalog.
-          </InfoTip>
-        </span>
-        <MapCatalogPicker
-          catalog={catalog}
-          disabled={disabled}
-          selectedId={state.entityId}
-          onSelect={onEntity}
-        />
-      </div>
+      {topSlotTarget ? (
+        createPortal(
+          <>
+            <ExplorerHeading />
+            <div className="atlas-field atlas-field--entity">{picker}</div>
+          </>,
+          topSlotTarget,
+        )
+      ) : (
+        <div className="atlas-field atlas-field--entity">
+          <span className="atlas-field__title">
+            <span>Select dataset</span>
+            {datasetTip}
+          </span>
+          {picker}
+        </div>
+      )}
 
       {selectedArtifact && (
         <ExternalInfoPanel artifact={selectedArtifact} load={onExternalInfo} />
@@ -398,6 +436,6 @@ export function ExplorerControls({
           </p>
         </details>
       </div>
-    </aside>
+    </ControlsSheet>
   );
 }

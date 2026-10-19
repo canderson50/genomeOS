@@ -3,7 +3,13 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { atlasCatalogSchema } from '../src/atlas/contracts';
+import { preloadScriptSource } from '../src/atlas/preload-script';
+
 const dist = path.resolve(import.meta.dirname, '../dist');
+// Only the inline catalog element; its assumptions deliberately mention the P0 registry.
+const INLINE_CATALOG =
+  /<script\b[^>]*\bid="atlas-catalog"[^>]*>([\s\S]*?)<\/script>/;
 
 function page(route: string): string {
   const filename = path.join(dist, route, 'index.html');
@@ -11,7 +17,10 @@ function page(route: string): string {
 }
 
 const home = page('');
-const project = page('project');
+const project = page('projects');
+// The redirect to Projects (R2-4): one h1, like every page.
+const projectRedirect = page('project');
+// The redirect to Contribute's working groups (#454): one h1, like every page.
 const groups = page('working-groups');
 const contribute = page('contribute');
 const preview = page('app');
@@ -19,83 +28,13 @@ const preview = page('app');
 describe('public site content', () => {
   it.each([
     ['home', home],
-    ['project', project],
+    ['projects', project],
+    ['project redirect', projectRedirect],
     ['working groups', groups],
     ['contribute', contribute],
     ['preview', preview],
   ])('renders one primary heading on the %s page', (_name, html) => {
     expect(html.match(/<h1(?:\s|>)/g) ?? []).toHaveLength(1);
-  });
-
-  it('labels current work, active work, and future ideas separately', () => {
-    expect(project).toMatch(
-      /Available now[\s\S]*In active development[\s\S]*Future exploration/,
-    );
-  });
-
-  it('leads with the higher-order mission and concrete applications', () => {
-    expect(home).toContain(
-      'Make the world’s genetic diversity legible and useful',
-    );
-    expect(home).toMatch(
-      /Potential applications[\s\S]*Screening programmes[\s\S]*Diagnostic context[\s\S]*Trial planning[\s\S]*The map of what we don’t know/,
-    );
-    expect(home).toContain(
-      'https://github.com/bschilder/genomeOS/discussions/1',
-    );
-    expect(home).toMatch(/open source/i);
-    expect(home).toMatch(/global community/i);
-    expect(home).toMatch(/public good/i);
-  });
-
-  it('reports sourced corpus metrics with an auditable definition', () => {
-    expect(home).toMatch(
-      /4,392[\s\S]*Genetic variants &amp; alleles[\s\S]*6\.69M[\s\S]*People represented[\s\S]*2[\s\S]*Diseases represented/,
-    );
-    expect(home).toContain('How these counts are defined');
-    expect(home).toContain('fc17bc1c1d96a0d0766746dcf26277ccdc669717');
-    expect(home).not.toContain('Measured here.');
-  });
-
-  it('defines all three forming working groups and modeling breadth', () => {
-    expect(groups).toMatch(
-      /Data Gathering &amp; Infrastructure[\s\S]*Statistical &amp; AI Modeling[\s\S]*UI &amp; Applications/,
-    );
-    expect(groups).toContain('geometric deep learning');
-    expect(groups).toContain('Brian');
-    expect(groups).toMatch(/not been sampled evenly/i);
-    expect(groups).toMatch(/disease-burden[\s\S]*risk estimates/i);
-    expect(groups).toMatch(/agentic AI[\s\S]*own genomes/i);
-    expect(groups).toContain('/images/group-data.webp');
-    expect(groups).toContain('/images/group-modeling.webp');
-    expect(groups).toContain('/images/group-ui.webp');
-    expect(groups).toMatch(
-      /Future exploration[\s\S]*privacy[\s\S]*consent[\s\S]*governance/,
-    );
-    expect(groups).toContain('Groups are forming');
-  });
-
-  it('teaches the repository contribution workflow', () => {
-    expect(contribute).toContain('Discussion #76');
-    expect(contribute).toContain('mention the original issue author');
-    expect(contribute).toContain('Ready');
-    expect(contribute).toContain('needs-human-decision');
-    expect(contribute).toContain('wants-expert-review');
-    expect(contribute).toContain(
-      'https://github.com/users/bschilder/projects/8',
-    );
-    expect(contribute).toContain('/images/contribute-community.webp');
-  });
-
-  it('states the scientific publication bar', () => {
-    expect(project).toMatch(/HbS[\s\S]*G6PD[\s\S]*screening/);
-    expect(project).toContain('Why haemoglobin S makes the mission tangible');
-    expect(project).toMatch(/population-location registry/i);
-    expect(project).toMatch(/interactive public map/i);
-    expect(project).toContain('/images/vision-earth.webp');
-    expect(project).toContain('/images/vision-cell.webp');
-    expect(project).toContain('/images/vision-bridge.webp');
-    expect(project).toContain('ancient-DNA time slider');
   });
 
   it('renders the native globe explorer instead of the diagnostic iframe', () => {
@@ -104,12 +43,44 @@ describe('public site content', () => {
     expect(preview).not.toContain(
       'https://genomeos-api-357876699511.us-east1.run.app/preview',
     );
-    expect(preview).not.toMatch(/\bP[0-9]+\b/);
+    expect(preview.replace(INLINE_CATALOG, '')).not.toMatch(/\bP[0-9]+\b/);
     expect(preview).toContain('Explore human genetic variation');
+  });
+
+  it('inlines the validated public catalog without markup characters', () => {
+    const match = preview.match(INLINE_CATALOG);
+    expect(match).not.toBeNull();
+    const text = match![1];
+    expect(text).not.toContain('<');
+    const inline = JSON.parse(text) as unknown;
+    expect(() => atlasCatalogSchema.parse(inline)).not.toThrow();
+    expect(inline).toEqual(
+      JSON.parse(
+        readFileSync(
+          path.resolve(
+            import.meta.dirname,
+            '../public/data/atlas/catalog.json',
+          ),
+          'utf8',
+        ),
+      ),
+    );
+    expect(preview.slice(0, preview.indexOf('</head>'))).toMatch(
+      INLINE_CATALOG,
+    );
   });
 
   it('does not expose unexplained internal project codes on introduction pages', () => {
     expect(home).not.toMatch(/\bP[0-9]+\b/);
     expect(project).not.toMatch(/\bP[0-9]+\b/);
+  });
+
+  it('preloads the selected artifact from an inline head script after the catalog', () => {
+    const head = preview.slice(0, preview.indexOf('</head>'));
+    const catalogAt = head.search(INLINE_CATALOG);
+    const scriptAt = head.indexOf(preloadScriptSource());
+    expect(catalogAt).toBeGreaterThan(-1);
+    expect(scriptAt).toBeGreaterThan(catalogAt);
+    expect(head).not.toContain('rel="preconnect"');
   });
 });

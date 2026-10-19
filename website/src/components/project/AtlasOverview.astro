@@ -1,0 +1,151 @@
+---
+/**
+ * The genomeOS Atlas overview (owner request, 2026-10-15; round 2 spec §4.2.2): the chapter opens on
+ * the essentials for a non-expert, in about 80 visible words, and everything else waits in the
+ * collapsed sections below it (AtlasSection.astro).
+ *
+ *   text     "Project 1", the chapter's h2 in the wordmark, why it matters, what it is and what you
+ *            can do with it, and the "Open the genomeOS Atlas" pill, which opens the Atlas on its
+ *            HbS map, as Home's pill does
+ *   visual   the product itself: a still of the live Atlas on its HbS map (src/assets/projects/
+ *            atlas-hbs.webp, captured from /app/?entity=hbs-rs334 with the published data, day/night
+ *            lighting off, place labels and country outlines off, on the public-domain Natural
+ *            Earth II basemap, cut to the globe's disc as a WebP with alpha), so the page's one
+ *            picture is the real thing, not a second copy of the index's mark or of Home's toy globe
+ *            (design critique of the integrated build). Round 2 of that critique: nothing in it
+ *            looks clickable but is not. No app controls or attribution bar are baked in, no label
+ *            debris at the limb; the picture itself links to the same map, and its key is one line
+ *            of HTML under it. Round 3: no black box and no frame, the disc sits on the band as
+ *            Home's preview does, and the key's ramp is sampled from the still's own rendered land
+ *            colours (the Atlas draws its surface over the basemap, so the drawn colours are not
+ *            the palette's), low to high.
+ *   facts    three totals from the pinned corpus revision (src/data/corpusMetrics.ts), the people
+ *            total marked "not deduplicated", and "How we count" behind a disclosure
+ *
+ * The totals are static text, so a total never reads as zero on screen, in a screenshot or to a
+ * screen reader. Nothing here moves or loads data; the still loads lazily as a WebP sized to its
+ * column (an AVIF of this screenshot came out larger). It replaces round 2's chapter opener and its
+ * Purpose · Process · Status chips: the section rows below are the chapter's navigation now.
+ */
+import { Picture } from 'astro:assets';
+
+import atlasStill from '../../assets/projects/atlas-hbs.webp';
+import { corpusMetrics, metricTotal } from '../../data/corpusMetrics';
+import { sitePath } from '../../lib/paths';
+
+/** The Atlas on its HbS map: the picture's subject, and where the pill and the picture go. */
+const HBS_MAP = sitePath('/app/?entity=hbs-rs334&palette=genome');
+
+const int = (value: number) => value.toLocaleString('en-US');
+const millions = (value: number) => `${(value / 1e6).toFixed(2)}M`;
+const { variants, people, diseases } = corpusMetrics;
+const FACTS = [
+  {
+    value: metricTotal(variants),
+    shown: int(metricTotal(variants)),
+    label: 'Variants & alleles in the source tables',
+  },
+  {
+    value: metricTotal(people),
+    shown: millions(metricTotal(people)),
+    label: people.isDeduplicated
+      ? 'People represented'
+      : 'People represented, not deduplicated',
+  },
+  {
+    value: metricTotal(diseases),
+    shown: int(metricTotal(diseases)),
+    label: 'Diseases represented',
+  },
+];
+---
+
+<div class="atlas-ov">
+  <div class="atlas-ov__text">
+    <p class="atlas-ov__kicker">Project 1</p>
+    <h2 class="atlas-ov__title" id="atlas-title">
+      <span class="brand-name">genomeOS</span> Atlas
+    </h2>
+    <p class="atlas-ov__lede">
+      Where a genetic variant is common shapes who is offered screening, how a
+      test result is read and where a study can recruit.
+    </p>
+    <p class="atlas-ov__body">
+      The Atlas maps variants on an interactive globe. Pick one, inspect any
+      place and see where evidence is thin.
+    </p>
+    <a class="atlas-open" href={HBS_MAP}>
+      <span class="atlas-open__label"
+        >Open the <span class="brand-name">genomeOS</span> Atlas</span
+      >
+      <svg
+        class="atlas-open__arrow"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M5 12h13M13 6l6 6-6 6"></path>
+      </svg>
+    </a>
+  </div>
+
+  <figure class="atlas-ov__visual">
+    <a class="atlas-ov__still-link" href={HBS_MAP}>
+      <Picture
+        class="atlas-ov__still"
+        src={atlasStill}
+        formats={['webp']}
+        fallbackFormat="webp"
+        widths={[400, 560, 720, 960, 1143]}
+        sizes="(min-width: 52rem) 558px, calc(100vw - 2.5rem)"
+        quality={72}
+        loading="lazy"
+        decoding="async"
+        alt="The genomeOS Atlas showing the sickle-cell variant HbS on a globe of Africa, Europe and western Asia: a teal surface, brightest across West, Central and East Africa."
+      />
+    </a>
+    <figcaption class="atlas-ov__caption">
+      The live Atlas: HbS frequency, <span class="atlas-ov__key"
+        >low{' '}<span class="atlas-ov__ramp"
+          ><span class="visually-hidden">to</span></span
+        >{' '}high.</span
+      >
+    </figcaption>
+  </figure>
+
+  <div class="atlas-ov__facts">
+    <ul class="atlas-ov__stats" aria-label="The Atlas in numbers">
+      {
+        FACTS.map((fact) => (
+          <li>
+            <data value={fact.value}>{fact.shown}</data>
+            <span>{fact.label}</span>
+          </li>
+        ))
+      }
+    </ul>
+    <details class="atlas-ov__method">
+      <summary>How we count</summary>
+      <div>
+        <p>
+          Variant total: {
+            int(variants.components.afndAlleleIdentifiersAfterCurrentFilters)
+          } identifiers from the <a href="https://www.allelefrequencies.net/"
+            >Allele Frequency Net Database (AFND)</a
+          > after the current quality filters, plus the hemoglobin S variant associated
+          with sickle-cell disease (also known as HbS or rs334). Participant total:
+          each retained database population sample counted once, plus people tested
+          in the retained hemoglobin S surveys and male participants in the retained
+          glucose-6-phosphate dehydrogenase (G6PD) deficiency surveys. Some studies
+          may include overlapping groups, so this total describes the scale of the
+          collected evidence rather than a verified census of unique individuals.
+        </p>
+        <p>
+          Recomputed {corpusMetrics.countedAt} from source snapshot <span
+            class="atlas-ov__revision">{corpusMetrics.sourceRevision}</span
+          >, last updated {corpusMetrics.sourceUpdatedAt}.
+        </p>
+      </div>
+    </details>
+  </div>
+</div>

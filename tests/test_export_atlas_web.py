@@ -8,10 +8,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from genomeos.publication.surface_codec import GosaError
+from genomeos.publication.web_format import WEB_FORMAT_VERSION
 from genomeos.registry.variants import load as load_variant_registry
 from genomeos.registry.variants import normalized_identity
 from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
-from scripts import export_atlas_web
+from scripts import encode_atlas_web, encode_natural_earth_borders, export_atlas_web
 
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
 VARIANT_ID = "chr11-5227002-T-A"
@@ -298,6 +300,31 @@ def test_export_preserves_support_versions_and_observation_evidence(
     ]
 
 
+def test_export_declares_the_compact_borders_the_site_ships(export_inputs: dict[str, Path]) -> None:
+    _export(export_inputs)
+    catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())
+    borders = encode_natural_earth_borders
+    # The served file is derived; its provenance stays the pinned upstream GeoJSON (issue #445).
+    assert catalog["context_sources"][0] == {
+        "id": "natural-earth-admin-0",
+        "label": "Natural Earth country boundaries",
+        "license": "public_domain",
+        "revision": borders.SOURCE_REVISION,
+        "source_url": borders.SOURCE_URL,
+        "url": "ne-50m-admin-0.borders.bin",
+    }
+    published = json.loads((export_atlas_web.ROOT / "website/public/data/atlas/catalog.json").read_text())
+    assert published["context_sources"] == catalog["context_sources"]
+
+
+def test_export_stamps_the_web_format_version_it_writes(export_inputs: dict[str, Path]) -> None:
+    """The catalog names its format (docs/web-data-format.md); the pre-#467 integer is not kept beside it."""
+    _export(export_inputs)
+    catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())
+    assert catalog["format_version"] == WEB_FORMAT_VERSION
+    assert "schema_version" not in catalog
+
+
 def test_export_is_byte_deterministic(export_inputs: dict[str, Path]) -> None:
     _export(export_inputs)
     before = {
@@ -312,6 +339,23 @@ def test_export_is_byte_deterministic(export_inputs: dict[str, Path]) -> None:
         if path.is_file()
     }
     assert after == before
+
+
+def test_export_output_is_an_intermediate_until_the_web_encoder_runs(
+    export_inputs: dict[str, Path],
+) -> None:
+    """The exporter never writes web objects, and its descending fixture grid is refused.
+
+    `_write_source_tree` lists 831f8dfffffffff before 831f8cfffffffff. Positional GOSA columns
+    require one sorted grid, so the encoder must refuse it loudly rather than reorder it (§B.5).
+    """
+    _export(export_inputs)
+    catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())
+    assert "grids" not in catalog
+    assert {"web", "observations_bytes"}.isdisjoint(catalog["artifacts"][0])
+    with pytest.raises(GosaError, match="grid not strictly increasing"):
+        encode_atlas_web.encode_export(export_inputs["out"], export_inputs["out"])
+    assert json.loads((export_inputs["out"] / "catalog.json").read_text()) == catalog
 
 
 def test_export_publishes_alphagenome_cache_with_pinned_model_version(

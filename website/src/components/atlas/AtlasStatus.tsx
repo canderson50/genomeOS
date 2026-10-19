@@ -10,6 +10,7 @@ import type {
   ExplorerLoadStatus,
 } from '../../atlas/progress';
 import type { StateCorrection } from '../../atlas/url-state';
+import type { SceneFailure } from './useAtlasSceneLifecycle';
 
 export type { ExplorerLoadStatus } from '../../atlas/progress';
 
@@ -20,9 +21,45 @@ interface AtlasStatusProps {
   sceneWarnings: readonly ContextWarning[];
   corrections: StateCorrection[];
   error: string | null;
-  webglFailed: boolean;
+  sceneFailure: SceneFailure | null;
   onRetry: () => void;
 }
+
+/**
+ * Each failure panel (Cesium globe design §12). Every failure offers Retry globe; the explorer
+ * chooses how to retry, and for a download, render or data-worker failure that is a page reload,
+ * which the copy says. A dead data worker can leave the globe up, so its panel names the map data
+ * (fast-load design §B.7, amended). Browser requirements only help with WebGL.
+ */
+const SCENE_FAILURE_COPY: Record<
+  SceneFailure,
+  { kicker: string; title: string; body: string; requirements: boolean }
+> = {
+  webgl: {
+    kicker: 'Globe unavailable',
+    title: 'This globe needs WebGL',
+    body: 'Your browser could not start the graphics engine. Try enabling hardware acceleration or opening the explorer in a current browser. No scientific data was changed.',
+    requirements: true,
+  },
+  download: {
+    kicker: 'Globe unavailable',
+    title: 'The globe could not load',
+    body: 'Part of the explorer did not download, often because the connection dropped. Retrying reloads the page; your map, view and layers are kept in the link. No scientific data was changed.',
+    requirements: false,
+  },
+  render: {
+    kicker: 'Globe interrupted',
+    title: 'The globe stopped rendering',
+    body: 'A network or graphics error caused this. Retry reloads the explorer with your current view. No scientific data was changed.',
+    requirements: false,
+  },
+  worker: {
+    kicker: 'Map data unavailable',
+    title: 'The map data could not load',
+    body: 'The map data loader stopped, often because the connection dropped. Retrying reloads the page; your map, view and layers are kept in the link. No scientific data was changed.',
+    requirements: false,
+  },
+};
 
 function NavbarAtlasStatus({
   activity,
@@ -84,30 +121,29 @@ export function AtlasStatus({
   sceneWarnings,
   corrections,
   error,
-  webglFailed,
+  sceneFailure,
   onRetry,
 }: AtlasStatusProps) {
-  if (webglFailed) {
+  if (sceneFailure) {
+    const copy = SCENE_FAILURE_COPY[sceneFailure];
     return (
       <section className="atlas-failure" role="alert">
-        <p className="atlas-kicker">Globe unavailable</p>
-        <h2>This globe needs WebGL</h2>
-        <p>
-          Your browser could not start the graphics engine. Try enabling
-          hardware acceleration or opening the explorer in a current browser. No
-          scientific data was changed.
-        </p>
+        <p className="atlas-kicker">{copy.kicker}</p>
+        <h2>{copy.title}</h2>
+        <p>{copy.body}</p>
         <div className="atlas-failure__actions">
           <button type="button" onClick={onRetry}>
             Retry globe
           </button>
-          <a
-            href="https://cesium.com/learn/cesiumjs-learn/cesiumjs-quickstart/#system-requirements"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Browser requirements
-          </a>
+          {copy.requirements && (
+            <a
+              href="https://cesium.com/learn/cesiumjs-learn/cesiumjs-quickstart/#system-requirements"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Browser requirements
+            </a>
+          )}
         </div>
       </section>
     );

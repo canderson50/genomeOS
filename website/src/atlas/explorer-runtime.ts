@@ -1,10 +1,7 @@
 /** Small browser-runtime helpers for Atlas design §11. */
 
 import type { ArtifactRef } from './contracts';
-import {
-  availableBasemaps,
-  availableTerrains,
-} from './scene/context-controller';
+import { availableBasemaps, availableTerrains } from './earth-style-catalog';
 import type { SceneCapabilities } from './scene/types';
 import type { ExplorerState } from './url-state';
 
@@ -35,4 +32,18 @@ export function errorMessage(error: unknown): string {
 export function supportsWebGL(): boolean {
   const canvas = document.createElement('canvas');
   return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
+}
+
+export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+/**
+ * The reduced-motion preference at first render (Cesium globe design §12). The scene is built
+ * with it, so reading it only in an effect would build a second globe for reduced-motion users.
+ * The server cannot know it; no server-rendered markup depends on it, so hydration still matches.
+ */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia(REDUCED_MOTION_QUERY).matches
+  );
 }

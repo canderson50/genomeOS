@@ -1,14 +1,12 @@
 /** Stable scene defaults and view policy for Atlas design §11. */
 
-import { Color, type Viewer } from 'cesium';
+import { Color, type CesiumWidget } from 'cesium';
 
-import type {
-  CameraState,
-  ExplorerSceneMode,
-  LayerVisibility,
-} from '../url-state';
+import type { CameraState, LayerVisibility } from '../url-state';
 import type { ObservationPresentation } from './types';
 import { DEFAULT_OBSERVATION_SIZE_RANGE } from '../observation-encoding';
+
+export { resolveElevationView } from '../earth-style-catalog';
 
 export interface EarthOpacityTarget {
   depthTestAgainstTerrain: boolean;
@@ -66,15 +64,8 @@ export const HOME_CAMERA: CameraState = {
   pitch: -90,
 };
 
-export function resolveElevationView(
-  view: ExplorerSceneMode,
-  elevationEnabled: boolean,
-): ExplorerSceneMode {
-  return view === 'map' && elevationEnabled ? 'perspective' : view;
-}
-
-export function styleAtlasScene(viewer: Viewer): void {
-  const scene = viewer.scene;
+export function styleAtlasScene(widget: CesiumWidget): void {
+  const scene = widget.scene;
   scene.backgroundColor = Color.fromCssColorString('#020712');
   applyOceanColor(scene.globe, '#071b35');
   applyEarthOpacity(scene.globe, 1);
@@ -85,5 +76,23 @@ export function styleAtlasScene(viewer: Viewer): void {
   scene.highDynamicRange = true;
   scene.postProcessStages.fxaa.enabled = true;
   scene.postProcessStages.bloom.enabled = false;
-  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
+  widget.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
+}
+
+/** Defers the sky-box textures until the returned reveal runs: after the map is ready and the
+ * post-reveal load order's earlier steps have settled (spec 2026-10-07 §B.6.9). */
+export function hideSkyUntilReady(scene: {
+  skyBox?: { show: boolean } | undefined;
+  requestRender(): void;
+}): () => void {
+  const skyBox = scene.skyBox;
+  if (!skyBox) return () => {};
+  skyBox.show = false;
+  let revealed = false;
+  return () => {
+    if (revealed) return;
+    revealed = true;
+    skyBox.show = true;
+    scene.requestRender();
+  };
 }

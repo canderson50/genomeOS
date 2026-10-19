@@ -1,23 +1,34 @@
-/** Compact evidence preview for Atlas design §11. */
+/**
+ * Compact evidence preview for Atlas design §11. Surface values follow fast-load
+ * spec 2026-10-07 §B.2 (amended 2026-10-13): marked render-tier values until the
+ * detail tier loads, then the exact values.
+ */
 
 import type { CSSProperties } from 'react';
 
 import type { ObservationColorEncoding } from '../../atlas/observation-encoding';
 import type { ObservationPlaceContext } from '../../atlas/place-context';
+import type { SurfaceArtifact } from '../../atlas/surface-columns';
 import {
   evidenceSupportLabel,
   type InspectorSelection,
 } from './InspectorPanel';
+import {
+  CELL_VALUES_UNAVAILABLE,
+  DETAIL_ONLY_TEXT,
+  percent,
+  provisionalPercent,
+  surfaceCellView,
+  type DetailStatus,
+} from './surface-cell-view';
 
 interface HoverPreviewProps {
   colorEncoding?: ObservationColorEncoding | null;
+  detail?: DetailStatus;
   placeContext?: ObservationPlaceContext | null;
   position: { x: number; y: number };
   selection: InspectorSelection;
-}
-
-function percent(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
+  surface?: SurfaceArtifact | null;
 }
 
 function encodedValue(encoding: ObservationColorEncoding): string {
@@ -33,9 +44,11 @@ function encodedValue(encoding: ObservationColorEncoding): string {
 
 export function HoverPreview({
   colorEncoding,
+  detail = 'loading',
   placeContext,
   position,
   selection,
+  surface = null,
 }: HoverPreviewProps) {
   const style = {
     '--atlas-hover-x': `${position.x}px`,
@@ -43,27 +56,50 @@ export function HoverPreview({
   } as CSSProperties;
 
   if (selection.kind === 'surface') {
-    const cell = selection.value;
+    const view = surfaceCellView(surface, selection, detail);
+    if (!view) return null;
     return (
       <div className="atlas-hover-preview" style={style} aria-hidden="true">
         <span>Modeled estimate</span>
-        <dl>
-          <div>
-            <dt>Posterior</dt>
-            <dd>{percent(cell.post_mean)}</dd>
-          </div>
-          <div>
-            <dt>95% credible range</dt>
-            <dd>
-              {percent(cell.q025)}–{percent(cell.q975)}
-            </dd>
-          </div>
-          <div>
-            <dt>Uncertainty</dt>
-            <dd>{percent(cell.post_sd)}</dd>
-          </div>
-        </dl>
-        <small>{evidenceSupportLabel(cell.support)}</small>
+        {view.state === 'values' ? (
+          <dl>
+            <div>
+              <dt>Posterior</dt>
+              <dd>{percent(view.cell.post_mean)}</dd>
+            </div>
+            <div>
+              <dt>95% credible range</dt>
+              <dd>
+                {percent(view.cell.q025)}–{percent(view.cell.q975)}
+              </dd>
+            </div>
+            <div>
+              <dt>Uncertainty</dt>
+              <dd>{percent(view.cell.post_sd)}</dd>
+            </div>
+          </dl>
+        ) : (
+          <>
+            <dl>
+              <div>
+                <dt>Posterior</dt>
+                <dd>{provisionalPercent(view.provisional.post_mean)}</dd>
+              </div>
+              <div>
+                <dt>95% credible range</dt>
+                <dd>{DETAIL_ONLY_TEXT[view.state]}</dd>
+              </div>
+              <div>
+                <dt>Uncertainty</dt>
+                <dd>{provisionalPercent(view.provisional.post_sd)}</dd>
+              </div>
+            </dl>
+            {view.state === 'unavailable' && (
+              <strong>{CELL_VALUES_UNAVAILABLE}</strong>
+            )}
+          </>
+        )}
+        <small>{evidenceSupportLabel(view.support)}</small>
       </div>
     );
   }

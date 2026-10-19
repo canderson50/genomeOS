@@ -55,20 +55,55 @@ and #49.
 
 After the `ci` workflow succeeds for a commit on `main`, the `container`
 workflow publishes the API/read-path image for both `linux/amd64` and
-`linux/arm64`:
+`linux/arm64`. To pull an immutable revision, replace `sha-xxxxxxx` with its
+seven-character commit tag:
 
 ```bash
-docker pull ghcr.io/bschilder/genomeos:latest
-docker pull ghcr.io/bschilder/genomeos:sha-<seven-character-commit>
+docker pull ghcr.io/genomeos/genomeos:latest
+TAG=sha-xxxxxxx
+docker pull "ghcr.io/genomeos/genomeos:$TAG"
 ```
 
 `latest` is the convenient discovery tag. Deployments must use the immutable
-`sha-...` tag so a cited service revision cannot change underneath them. Each
+`sha-...` tag so a cited service revision cannot change underneath them. Tags
+published before the repository moved to the genomeOS organization were not
+copied; a revision cited from that period stays pullable at
+`ghcr.io/bschilder/genomeos:sha-...`. Each
 manifest includes OCI source and revision labels, an SBOM, and provenance
 attestations. The image is only published after the same root Dockerfile has
 passed the container HTTP smoke in `ci`.
+
+If `docker pull` without a GitHub login is refused, check the package's
+visibility. GitHub creates a new container package as private, and linking it
+to the repository carries over access permissions but not visibility. An
+organization owner makes it public under Package settings, then Danger zone.
 
 Cloud Run mounts the artifact bucket read-only at `/mnt/atlas` in the second-generation
 execution environment. Publish every version below `catalogs/<artifact-version>/`, upload
 data objects before `manifest.json`, and set `ATLAS_ARTIFACT_ROOT` to that exact versioned
 directory. Never point the service at a mutable bucket root.
+
+## Public Atlas web bucket
+
+The website's per-artifact Atlas data (encoded `.gosa` tiers and the canonical surface,
+observations and manifest JSON) is served from a separate **public** bucket. It is not the private
+artifact bucket above and does not replace #33's artifact staging and version pinning: it holds only
+encoded site data under content-addressed keys below `atlas/web/`.
+
+- `us-east1`, uniform bucket-level access, `allUsers` with `roles/storage.objectViewer`, no object
+  versioning (keys are content-addressed), default soft delete. Published objects are never deleted.
+- CORS comes from `deploy/atlas-web-cors.json`: `GET` and `HEAD` from the production origins and the
+  local ports 4321–4323.
+- `python scripts/provision_atlas_web_bucket.py --mode edge` (provisioned) serves the objects from
+  Google's edge cache at `https://storage.googleapis.com/<bucket>/atlas/web/`. `--mode cloud-cdn`
+  (scripted, not provisioned) adds a backend bucket with Cloud CDN behind a global external HTTPS load
+  balancer with a Google-managed certificate for `data.genome-os.org`; it needs a DNS A record at the
+  registrar (a human step) and has a recurring load-balancer cost.
+- Provisioning reads and reports public-access prevention and the effective
+  `iam.allowedPolicyMemberDomains`, `iam.managed.allowedPolicyMembers` and
+  `storage.publicAccessPrevention` organization policies, and stops before changing anything when one
+  would block public objects. It is idempotent and `--dry-run` prints every command: it reads nothing,
+  so it always shows the new-bucket plan, and the live run still refuses an existing bucket it did not
+  create.
+
+The publish runbook is in [`data-store.md`](data-store.md#public-web-data-bucket).

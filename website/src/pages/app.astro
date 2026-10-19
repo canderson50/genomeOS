@@ -1,16 +1,76 @@
 ---
 import AtlasExplorer from '../components/atlas/AtlasExplorer';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { escapeInlineJson, INLINE_CATALOG_ID } from '../atlas/inline-catalog';
+import { preloadScriptSource } from '../atlas/preload-script';
+import {
+  assertE2eHooks,
+  assertRequestStallOverride,
+  loadPageCatalog,
+} from '../lib/catalog-build';
+import {
+  artifactDataBaseFrom,
+  assertDataBase,
+  dataOrigin,
+} from '../lib/data-url';
 import { sitePath } from '../lib/paths';
+
+// fast-load design §B.4: site data always same-origin; the artifact base is
+// PUBLIC_ATLAS_DATA_BASE_URL (design 2026-10-07 §C.1.4), or the site base when it is unset.
+const siteDataBase = sitePath('/data/atlas/');
+const artifactDataBase = artifactDataBaseFrom(
+  import.meta.env.PUBLIC_ATLAS_DATA_BASE_URL,
+  siteDataBase,
+);
+// Baked-in bases, read by scripts/check_atlas_web_data.py --production and the test harnesses.
+const dataBasesJson = escapeInlineJson(
+  JSON.stringify({ artifact: artifactDataBase, site: siteDataBase }),
+);
+assertDataBase(siteDataBase);
+// fast-load design §B.6.1: the same strict schema the client uses; a violation fails the build.
+const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
+assertRequestStallOverride(
+  process.env.ATLAS_CATALOG_PATH,
+  import.meta.env.PUBLIC_ATLAS_REQUEST_STALL_MS,
+);
+assertE2eHooks(
+  process.env.ATLAS_CATALOG_PATH,
+  import.meta.env.PUBLIC_ATLAS_E2E_HOOKS,
+);
+const preconnect = dataOrigin(artifactDataBase);
 ---
 
 <SiteLayout
   title="Atlas"
   description="Explore measured observations, modeled geographic patterns, uncertainty, and evidence gaps in the genomeOS globe atlas."
+  htmlClass="atlas-page"
+  viewportFit="cover"
 >
+  <Fragment slot="head">
+    {
+      preconnect && (
+        <link rel="preconnect" href={preconnect} crossorigin="anonymous" />
+      )
+    }
+    <script
+      type="application/json"
+      id={INLINE_CATALOG_ID}
+      data-artifact-data-base={artifactDataBase}
+      is:inline
+      set:html={catalogJson}
+    />
+    <script
+      type="application/json"
+      id="atlas-data-bases"
+      is:inline
+      set:html={dataBasesJson}
+    />
+    <script is:inline set:html={preloadScriptSource()} />
+  </Fragment>
   <AtlasExplorer
     client:load
+    artifactDataBase={artifactDataBase}
     cesiumToken={import.meta.env.CESIUM_TOKEN ?? ''}
-    dataBaseUrl={sitePath('/data/atlas/')}
+    siteDataBase={siteDataBase}
   />
 </SiteLayout>

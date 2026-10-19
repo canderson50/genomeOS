@@ -1,0 +1,1401 @@
+/*
+ * Contribute (site redesign spec §4.3, #454). Owned by the Contribute page task; loaded after the
+ * shared CSS.
+ *
+ *   .contribute-*   page type and section heads
+ *   .orbit*         working groups: the orbit scene and its typed columns (OrbitScene.astro)
+ *   .wg-*           how the groups fit together: the transit line plate (TransitLine.astro)
+ *
+ * The work board (.wb-*, "How work moves") lives in components/contribute/how-work-moves.css with
+ * its section (round 2 plan T0 step 3).
+ */
+
+/* ---------- page type ---------- */
+
+.contribute-h2 {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+.contribute-head {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--grid-gap);
+  align-items: end;
+  margin-bottom: var(--head-gap);
+}
+
+.contribute-head .contribute-h2 {
+  grid-column: 1 / span 7;
+}
+
+.contribute-legend {
+  grid-column: 9 / span 4;
+  max-width: 38ch;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--type-legend);
+  line-height: 1.5;
+}
+
+.contribute-legend strong {
+  color: var(--color-starlight);
+  font-weight: 620;
+}
+
+.contribute-more {
+  margin: clamp(1.5rem, 3vw, 2.25rem) 0 0;
+}
+
+.contribute-more a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.contribute-more a:hover .contribute-mark {
+  translate: 0.15rem 0;
+}
+
+.contribute-mark {
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+  vertical-align: middle;
+}
+
+.contribute-more .contribute-mark {
+  transition: translate var(--dur-micro) var(--ease-ui);
+}
+
+/* ---------- working groups: the orbit scene ---------- */
+
+/* The intro hands straight over to the orbit: a tighter intro and a band that opens tight, so the
+   plate's top is the first thing below the lede, and the globe and the first moon are on the first
+   screen of a laptop (round 2 spec §4.3.1; design critique of the integrated build: at 1440 × 900
+   the first screen showed 217 px of an empty stage). Two classes: the built stylesheet may order
+   the shared .band and .page-intro rules after these. */
+.contribute-intro .page-intro--split .page-intro__inner {
+  padding-block: clamp(2.25rem, 4vw, 3rem) clamp(1.5rem, 2.5vw, 2rem);
+}
+
+.band.wg-section {
+  --wg-band-top: clamp(1.25rem, 2.2vw, 1.75rem);
+  padding-top: var(--wg-band-top);
+}
+
+/* A link to the working groups (/working-groups/, the docs' links to #working-groups) lands the
+   plate's top, not the section's, on the bar's bottom edge. html's scroll padding is the landing
+   bar's, but this far down the page the bar has compacted (MotionController), so the section
+   stopped 47 px lower than the bar on a laptop and 33 px on a phone, plus the band's opening:
+   the plate's top was at 151 and 128 px, the intro's last line showed between it and the bar,
+   and at 1440 × 900 the columns' links ended 75 px below the screen (final verification). Only
+   with scripting: without it the bar stays at its landing height, and html's padding is right. */
+@media (scripting: enabled) {
+  .band.wg-section {
+    scroll-margin-top: calc(
+      var(--compact-header-height) - var(--site-header-height) - 1px - 1rem -
+        var(--wg-band-top)
+    );
+  }
+}
+
+/* A short laptop screen (1366 × 768, 1280 × 800): the intro's padding and lede step down further
+   (the H1 keeps the site's size), so the globe and the first moon still show on the first screen.
+   The plate tightens too: its bar (no taller than its Pause and Replay) and heading, and its
+   columns' spacing and type, a step smaller, so that the bar, the whole stage and every line the
+   columns type show on one screen under the site's header (owner, 2026-10-15), where the story
+   starts with the bar's Pause in view (orbit.ts startWhen; design critique of the integrated build,
+   round 2). The drawing is sized to those typed lines, not to the links under them, so the moons and
+   crews stay within a tenth of their size before the plate got shorter (brief: "don't shrink by more
+   than about 10%"; 0.66 px a unit at 1366 × 768, was 0.73; review of the orbit's hover, finding 4).
+   */
+@media (min-width: 52rem) and (max-height: 52rem) {
+  .contribute-intro .page-intro--split .page-intro__inner {
+    padding-block: 1.6rem 1.25rem;
+  }
+
+  .contribute-intro .page-intro--split .page-intro__lede {
+    font-size: 1.1rem;
+  }
+
+  .band.wg-section {
+    --wg-band-top: 1rem;
+  }
+
+  .wg-section .orbit__bar {
+    min-height: 2.75rem;
+    padding-block: 0.1rem;
+  }
+
+  .wg-section .orbit__title {
+    font-size: clamp(1.55rem, 2.3vw, 2.15rem);
+  }
+
+  .wg-section .orbit-col {
+    gap: 0.15rem;
+    padding-top: 0.45rem;
+  }
+
+  .wg-section .orbit-col__icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .wg-section .orbit-col__status {
+    line-height: 1.1;
+  }
+
+  .wg-section .orbit-col__what {
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+
+  .wg-section .orbit-col__who {
+    font-size: 0.9rem;
+  }
+
+  .wg-section .orbit-svg--desktop {
+    width: min(100%, max(818px, min(1320px, (100svh - 18.4rem) * 1320 / 665)));
+  }
+}
+
+.flow-section .contribute-h2 {
+  margin-bottom: clamp(1.1rem, 2vw, 1.5rem);
+}
+
+/*
+ * The orbit plate (OrbitScene.astro; round 2 spec §4.3.2): the kit plate's frame, ticks and dot
+ * grid (.kit-plate, Plate.astro's styles, which the transit line's plate brings to this page), a
+ * top bar with the caption line and the scene's controls, the stage, and the group columns.
+ *
+ * Each column dims by colour while it waits for its moon (--orbit-wait, 1 → 0 on the scene
+ * timeline, orbit.ts), never by opacity, so its text holds 4.5:1 at every instant: faint is 5.8:1
+ * on the plate and every colour between it and starlight, aurora or ion is lighter still.
+ */
+@property --orbit-wait {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --orbit-link-wait {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.orbit {
+  container: orbit / inline-size;
+}
+
+/* The top bar: the section's kicker and heading, the caption line, then the scene's controls,
+   whose room is reserved before the scene takes them over (they are `hidden` until then), so the
+   bar never grows under the visitor's eyes; under reduced motion they never come (scenes.css hides
+   their row). On wide plates it is one line: the kicker, the heading and the caption on one
+   baseline, which leaves the stage the height a second line took (owner, 2026-10-15: the plate
+   "maybe 20% less tall"); on narrow ones the kicker sits over the heading, the caption goes under
+   it and the controls stay at the bar's top right. */
+.orbit__bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head controls'
+    'caption caption';
+  align-items: start;
+  gap: 0.35rem 1rem;
+  padding-block: 0.6rem 0.7rem;
+  padding-right: 0.45rem;
+  border-bottom: 1px solid var(--color-deep-line);
+}
+
+.orbit__head {
+  grid-area: head;
+  min-width: 0;
+  padding-top: 0.25rem;
+}
+
+.orbit__kicker {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.orbit__title {
+  margin: 0;
+  color: var(--color-starlight);
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.orbit__caption {
+  grid-area: caption;
+  min-width: 0;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.orbit__bar .kit-scene-controls {
+  grid-area: controls;
+  justify-content: flex-end;
+  min-width: calc(2 * 44px + 0.25rem);
+  min-height: 44px;
+}
+
+@container orbit (min-width: 860px) {
+  .orbit__bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'head caption controls';
+    align-items: baseline;
+    column-gap: 2rem;
+    padding-block: 0.3rem 0.35rem;
+  }
+
+  .orbit__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 1.1rem;
+    padding-top: 0;
+  }
+
+  .orbit .orbit__kicker {
+    margin: 0;
+  }
+
+  .orbit__bar .kit-scene-controls {
+    align-self: center;
+  }
+}
+
+/* On a phone (the phone layout: a stage under 680 px) the bar is one row, the kicker over the
+   heading beside the controls, and the caption line closes the plate under the columns. With the
+   caption in the bar, the bar took 163 to 216 px, and a phone screen showed the stage or the text
+   it types under it, never both (design critique 4; owner: "explanatory texts appear below the
+   entire scene"). The caption stays in the bar's figcaption, which gives up its box on a phone, so
+   the figure lays the bar's parts out on its own grid with the stage and the columns. A container
+   query can't style its own container, so the section's shell is the container the figure's grid
+   asks (the figure's 1 px frame each side: 682 px of shell is the 680 px stage). The heading
+   keeps to two lines down to the 320 px phone, where 1.5rem would take three. */
+.wg-section > .section-shell {
+  container: orbit-shell / inline-size;
+}
+
+@container orbit-shell (max-width: 681.98px) {
+  .orbit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .orbit__bar {
+    display: contents;
+  }
+
+  .orbit__head {
+    grid-area: 1 / 1;
+    padding: 0.55rem 0 0.6rem 1.1rem;
+  }
+
+  /* Two classes: the built stylesheet orders the shared .section-kicker after this one. */
+  .orbit .orbit__kicker {
+    margin-bottom: 0.15rem;
+  }
+
+  .orbit__title {
+    font-size: clamp(1.3rem, 8.6cqi, 1.5rem);
+  }
+
+  .orbit__bar .kit-scene-controls {
+    grid-area: 1 / 2;
+    align-self: start;
+    padding: 0.3rem 0.45rem 0 0;
+  }
+
+  .orbit__stage {
+    grid-area: 2 / 1 / 3 / -1;
+    border-top: 1px solid var(--color-deep-line);
+  }
+
+  .orbit__cols {
+    grid-area: 3 / 1 / 4 / -1;
+  }
+
+  .orbit__caption {
+    grid-area: 4 / 1 / 5 / -1;
+    padding: 0.65rem 1.1rem;
+    border-top: 1px solid var(--color-deep-line);
+  }
+}
+
+/* The stage draws the layout that fits its width (orbit-layouts.ts LAYOUTS): phones below 680 px,
+   tablets from 680 px, desktops from 960 px, so the moon labels stay at 13 px or more. */
+/* The stage listens for a moon's click (contribute.astro), so iOS would flash its tap highlight
+   over the whole of it on any tap, sky included. */
+.orbit__stage {
+  container: orbit-stage / inline-size;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-deep-line);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.orbit-svg {
+  display: none;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: var(--font-body);
+}
+
+/* A portrait stage: on wide phones and small tablets it stays a phone's size, centred. */
+.orbit-svg--phone {
+  display: block;
+  max-width: 32rem;
+  margin-inline: auto;
+}
+
+/* On wide stages the drawing (never the plate) is sized to the screen's height; never narrower
+   than the width that keeps its labels at 13 px (orbit-layouts.ts minWidth), centred on the plate's
+   dot grid. The desktop's leaves room for the one-line bar, its columns down to their links and the
+   site's compact header, 23.5rem in all, so the whole plate shows on one laptop screen (owner,
+   2026-10-15; 1440 × 900 and up), and on a short one the bar, the stage and every typed line. */
+.orbit-svg--tablet {
+  width: min(100%, max(680px, (100svh - 20rem) * 900 / 503));
+  margin-inline: auto;
+}
+
+.orbit-svg--desktop {
+  width: min(100%, max(818px, min(1320px, (100svh - 23.5rem) * 1320 / 665)));
+  margin-inline: auto;
+}
+
+@container orbit-stage (min-width: 680px) {
+  .orbit-svg--phone {
+    display: none;
+  }
+
+  .orbit-svg--tablet {
+    display: block;
+  }
+}
+
+@container orbit-stage (min-width: 960px) {
+  .orbit-svg--tablet {
+    display: none;
+  }
+
+  .orbit-svg--desktop {
+    display: block;
+  }
+}
+
+/*
+ * A moon is a link to its group's open issues (owner, 2026-10-15: "hovering over each moon should
+ * make elements on it light up. clicking it brings you to the Issues page on GH with
+ * working-group-specific filters applied"). The page's island opens the URL its column's link holds
+ * (contribute.astro); keyboards and screen readers have the column links, as the stage is one image
+ * with no tab stop. Only the moon's own art takes the pointer, and only while it shows: its disc
+ * and engraving (not the glow round it), its crew once landed and its props once set up, and its
+ * label while it shows. orbit.ts hides each of those with `visibility` as well as opacity until
+ * then, as the pointer ignores opacity (review of the orbit's hover, finding 9). The sky, the
+ * orbit, the globe, and a pod or a bubble passing over, let it through.
+ *
+ * Hovered, the moon wakes: its engraving lights to full ion with a faint glow, its rim brightens, a
+ * dotted ring like the orbit's own draws round it, the crew's suits and visors catch the light,
+ * the props glow, and the label turns ion. Whichever part of it the pointer is on, moon or label,
+ * the whole moon lights, and only it. The idle orbit carries on: at 240 s a revolution a moon
+ * drifts about 10 px a second, so it stays under a resting pointer for seconds, and holding it
+ * would stop the one clock the labels, the crews and the camera keep to. A pointer's hover only
+ * (touch screens just open the link), over the motion tokens; under reduced motion it lights at
+ * once (no transition, below).
+ */
+.orbit-svg {
+  pointer-events: none;
+}
+
+.orbit-svg :is(.moon, .on-moon, .moon-label) {
+  pointer-events: visiblePainted;
+  cursor: pointer;
+}
+
+.orbit-svg .moon > circle:first-child {
+  pointer-events: none;
+}
+
+.orbit-svg .moon-icon,
+.orbit-svg .on-moon {
+  transition: filter var(--dur-ui) var(--ease-ui);
+}
+
+.orbit-svg .moon-icon {
+  transition-property: opacity, filter;
+}
+
+.orbit-svg .moon > circle:last-of-type {
+  transition: stroke var(--dur-ui) var(--ease-ui);
+}
+
+.orbit-svg .moon-label {
+  transition: fill var(--dur-ui) var(--ease-ui);
+}
+
+.moon-ring {
+  opacity: 0;
+  transform: scale(0.94);
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition:
+    opacity var(--dur-ui) var(--ease-ui),
+    transform var(--dur-ui) var(--ease-ui);
+}
+
+/* Whichever part of a moon the pointer is on, moon or label: that moon. */
+@media (hover: hover) {
+  :is(
+      .orbit-svg:has([data-moon='data']:hover) [data-moon='data'],
+      .orbit-svg:has([data-moon='model']:hover) [data-moon='model'],
+      .orbit-svg:has([data-moon='ui']:hover) [data-moon='ui']
+    )
+    .moon-icon {
+    opacity: 1;
+    filter: drop-shadow(0 0 2.5px rgb(112 230 255 / 85%));
+  }
+
+  :is(
+      .orbit-svg:has([data-moon='data']:hover) [data-moon='data'],
+      .orbit-svg:has([data-moon='model']:hover) [data-moon='model'],
+      .orbit-svg:has([data-moon='ui']:hover) [data-moon='ui']
+    )
+    .moon
+    > circle:last-of-type {
+    stroke: var(--color-ion);
+  }
+
+  :is(
+      .orbit-svg:has([data-moon='data']:hover) [data-moon='data'],
+      .orbit-svg:has([data-moon='model']:hover) [data-moon='model'],
+      .orbit-svg:has([data-moon='ui']:hover) [data-moon='ui']
+    )
+    .moon-ring {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+
+  :is(
+      .orbit-svg:has([data-moon='data']:hover) [data-moon='data'],
+      .orbit-svg:has([data-moon='model']:hover) [data-moon='model'],
+      .orbit-svg:has([data-moon='ui']:hover) [data-moon='ui']
+    )
+    .crew {
+    filter: brightness(1.15) drop-shadow(0 0 2.5px rgb(112 230 255 / 40%));
+  }
+
+  :is(
+      .orbit-svg:has([data-moon='data']:hover) [data-moon='data'],
+      .orbit-svg:has([data-moon='model']:hover) [data-moon='model'],
+      .orbit-svg:has([data-moon='ui']:hover) [data-moon='ui']
+    )
+    .on-moon:not(.crew) {
+    filter: brightness(1.2) drop-shadow(0 0 3px rgb(112 230 255 / 55%));
+  }
+
+  :is(
+      .orbit-svg:has([data-moon='data']:hover) [data-moon='data'],
+      .orbit-svg:has([data-moon='model']:hover) [data-moon='model'],
+      .orbit-svg:has([data-moon='ui']:hover) [data-moon='ui']
+    )
+    .moon-label {
+    fill: var(--color-ion);
+  }
+}
+
+/* The columns: stacked on narrow plates, three abreast from 860 px, split by hairlines. Space for
+   every typed character is reserved (the twin's characters are only transparent), so typing
+   never shifts the layout. */
+.orbit__cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.orbit-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 1.35rem 1.4rem 1.4rem;
+}
+
+.orbit-col + .orbit-col {
+  border-top: 1px solid var(--color-deep-line);
+}
+
+/* Abreast, the columns share their rows (subgrid): titles, "Group forming", the typed lines and
+   the links line up across all three however a title wraps. They set tighter than stacked ones,
+   in spacing and leading, so the plate's text shows with its stage (owner, 2026-10-15). */
+@container orbit (min-width: 860px) {
+  .orbit__cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(4, auto) 1fr;
+  }
+
+  .orbit-col {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    align-content: start;
+    gap: 0.3rem;
+    padding: 0.8rem 1.15rem 0.6rem;
+  }
+
+  .orbit-col + .orbit-col {
+    border-top: 0;
+    border-left: 1px solid var(--color-deep-line);
+  }
+
+  .orbit-col__link {
+    align-self: end;
+    justify-self: start;
+  }
+}
+
+/* An ion rule draws across the column whose text is typing, and hands over to the next. */
+.orbit-col__rule {
+  position: absolute;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--color-ion);
+  opacity: 0;
+  transform-origin: 0 50%;
+}
+
+.orbit-col__head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.orbit-col__icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  opacity: calc(1 - 0.6 * var(--orbit-wait));
+}
+
+.orbit-col__title {
+  margin: 0;
+  color: color-mix(
+    in srgb,
+    var(--color-faint) calc(var(--orbit-wait) * 100%),
+    var(--color-starlight)
+  );
+  font-family: var(--font-display);
+  font-size: var(--type-h3);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+/* "Group forming": the aurora status dot always comes with its words. */
+.orbit-col__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: color-mix(
+    in srgb,
+    var(--color-faint) calc(var(--orbit-wait) * 100%),
+    var(--color-aurora)
+  );
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.orbit-col__status::before {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-aurora);
+  content: '';
+  opacity: calc(1 - 0.65 * var(--orbit-wait));
+}
+
+.orbit-col__what,
+.orbit-col__who {
+  /* About 65 characters a line where the columns stack under a wide plate (a 900 px window: ~105
+     without it). In em, not ch, so the measure holds while the web font swaps in (ruling 34). */
+  max-inline-size: 34em;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.orbit-col__what {
+  color: var(--color-text-soft);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.orbit-col__who {
+  color: var(--color-muted);
+  font-size: var(--type-legend);
+  line-height: 1.5;
+}
+
+/* Abreast, a touch tighter (the columns' spacing, above). */
+@container orbit (min-width: 860px) {
+  .orbit-col__icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .orbit-col__status {
+    line-height: 1.3;
+  }
+
+  .orbit-col__what {
+    line-height: 1.5;
+  }
+
+  .orbit-col__who {
+    line-height: 1.45;
+  }
+}
+
+/* On a phone the panel's head sets a touch tighter too, its status as abreast, so the line it
+   types third shows with the whole stage on a 360 × 740 screen, for a group whose title takes two
+   lines as well (design critique 4). */
+@container orbit (max-width: 679.98px) {
+  .orbit-col {
+    padding-top: 1.1rem;
+  }
+
+  .orbit-col__status {
+    line-height: 1.3;
+  }
+}
+
+/*
+ * The typing (review of T4, finding 4; orbit-layouts.ts typedTwin). The kit types a twin by giving
+ * every character an opacity worked out from the twin's count (--n): at the orbit's 62 characters a
+ * second that switched a compositing layer per character on every frame and dropped a third of
+ * them at 4× CPU. Here each chunk of 12 characters works out how far into it the typing is
+ * (--orbit-typed, 0 to 12; it changes for one chunk at a time) and a container style query hides
+ * what is not typed yet with `visibility`, which only repaints. A chunk past the typing shows in
+ * full; without style queries, the kit's per-character opacity applies (the fallback below). The
+ * ion caret is a 2 px shadow on the last character typed.
+ */
+@property --orbit-typed {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 12;
+}
+
+.orbit .typed > .tc {
+  --orbit-typed: clamp(0, calc(var(--n) - var(--a)), 12);
+
+  position: static;
+  opacity: 1;
+}
+
+.orbit .typed > .tc::after {
+  content: none;
+}
+
+.orbit .tc > span {
+  box-shadow: 2px 0 0
+    rgb(
+      112 230 255 /
+        calc(
+          clamp(0, calc(var(--n) - var(--i)), 1) *
+            clamp(0, calc(2 - var(--n) + var(--i)), 1)
+        )
+    );
+  opacity: clamp(0, calc(var(--n) - var(--i)), 1);
+}
+
+@container style(--orbit-typed: 0) {
+  .orbit .tc > span {
+    visibility: hidden;
+    opacity: 1;
+  }
+}
+
+@container style(--orbit-typed: 1) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 2) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 2) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 3) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 3) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 4) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 4) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 5) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 5) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 6) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 6) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 7) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 7) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 8) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 8) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 9) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 9) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 10) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 10) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 11) {
+    visibility: hidden;
+  }
+}
+
+@container style(--orbit-typed: 11) {
+  .orbit .tc > span {
+    opacity: 1;
+  }
+
+  .orbit .tc > span:nth-child(n + 12) {
+    visibility: hidden;
+  }
+}
+
+/* Always focusable and readable: it only lights from faint to ion once its column is typed. */
+.orbit-col__link {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  margin-top: auto;
+  color: color-mix(
+    in srgb,
+    var(--color-faint) calc(var(--orbit-link-wait) * 100%),
+    var(--color-ion)
+  );
+  font-size: var(--type-legend);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.orbit-col__link:hover {
+  color: var(--color-starlight);
+  text-decoration: underline;
+}
+
+/* A link to a group's column (#group-ui; /working-groups/#ui redirects there) marks the column the
+   visitor asked for with the ion rule a column shows while it types (design critique of the
+   integrated build). A shadow, so the rule's own tracks (orbit.ts) never override it. */
+.orbit-col:target {
+  box-shadow: inset 0 2px 0 var(--color-ion);
+}
+
+/*
+ * One panel under the stage while the story plays on a narrow plate (design critique of the
+ * integrated build: on a phone, groups 2 and 3 typed 400–900 px below the stage, out of sight). The
+ * stacked columns share one grid cell, so the panel is as tall as the tallest and switching moves
+ * nothing, and only the group being introduced shows: its moon's arrival, then each landing in step
+ * with the phone's close-ups (--orbit-panel, 1–3 on the scene timeline, orbit.ts). The others stay
+ * in the DOM, read by assistive tech; a column that takes keyboard focus shows instead. At the
+ * story's end (--orbit-panel 0), under reduced motion, without JavaScript or style queries, all
+ * three stack as before. The switch is instant: an opacity cross-fade would put text below 4.5:1
+ * mid-fade (rulings, item 25).
+ */
+@property --orbit-panel {
+  syntax: '<integer>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@container orbit (max-width: 859.98px) and (not style(--orbit-panel: 0)) {
+  .orbit-col {
+    grid-area: 1 / 1;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .orbit-col + .orbit-col {
+    border-top: 0;
+  }
+
+  .orbit-col:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@container orbit (max-width: 859.98px) and style(--orbit-panel: 1) {
+  .orbit__cols:not(:focus-within) > .orbit-col:nth-child(1) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@container orbit (max-width: 859.98px) and style(--orbit-panel: 2) {
+  .orbit__cols:not(:focus-within) > .orbit-col:nth-child(2) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@container orbit (max-width: 859.98px) and style(--orbit-panel: 3) {
+  .orbit__cols:not(:focus-within) > .orbit-col:nth-child(3) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* On a phone the group in the panel sets its link right under its words, as every column does once
+   the story ends, and the room a longer group needs falls below the link. The panel keeps one
+   height, so a switch moves nothing under it, but no group's link stands apart from its text
+   (design critique 4: up to 120 px between them). */
+@container orbit (max-width: 679.98px) and (not style(--orbit-panel: 0)) {
+  .orbit-col__link {
+    margin-top: 0;
+  }
+}
+
+/* Phones, under reduced motion, in forced colours or without JavaScript: a close-up of each moon
+   above its text, the story's last frame through a viewBox on the one phone scene (round 2 spec
+   §4.3.2). */
+.orbit-col__shot {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce),
+  (scripting: none),
+  (forced-colors: active) {
+  @container orbit (max-width: 679.98px) {
+    .orbit-col__shot {
+      display: block;
+      width: 100%;
+      max-width: 32rem;
+      height: auto;
+      margin-bottom: 0.35rem;
+      overflow: hidden;
+      border: 1px solid var(--color-deep-line);
+      background-color: var(--color-plate);
+      background-image: radial-gradient(
+        circle at 1px 1px,
+        var(--color-grid-dot) 1px,
+        transparent 1.3px
+      );
+      background-size: 24px 24px;
+      aspect-ratio: 358 / 210;
+    }
+  }
+}
+
+/* Armed before the first paint, until the scene is built (the head script in contribute.astro,
+   spec §2.7 rule 5): the story's first moment, drawn in CSS: the globe, its halo and the dotted
+   orbit, no moons or labels yet (so the stage is never an empty box before the story starts;
+   design critique of the integrated build), every column waiting, nothing typed, and on a narrow
+   plate only the first group's panel. orbit.ts seeks the same moment. */
+@media screen {
+  :root[data-arm-orbit] .orbit:not([data-scene-state]) {
+    --orbit-panel: 1;
+  }
+
+  :root[data-arm-orbit] .orbit:not([data-scene-state]) .orb-label {
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  :root[data-arm-orbit] .orbit:not([data-scene-state]) .moon-pop {
+    transform: scale(0);
+  }
+
+  :root[data-arm-orbit] .orbit:not([data-scene-state]) .orbit-col {
+    --orbit-wait: 1;
+  }
+
+  :root[data-arm-orbit] .orbit:not([data-scene-state]) .orbit-col__link {
+    --orbit-link-wait: 1;
+  }
+
+  :root[data-arm-orbit] .orbit:not([data-scene-state]) .typed {
+    --n: 0;
+  }
+}
+
+/* ---------- how the groups fit together: the transit line ---------- */
+
+/* The transit line (round 2 spec §4.3.3, its own section after the orbit): horizontal swimlanes
+   from an 870 px stage, a vertical rail below that (transit-route.ts holds the geometry; each
+   layout keeps its labels at 13 px or more). */
+.wg-transit > .kit-plate__stage {
+  container: wg-transit / inline-size;
+}
+
+.wg-transit__layout {
+  position: relative;
+  margin-inline: auto;
+}
+
+.wg-transit__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: var(--font-body);
+}
+
+.wg-transit__layout--h {
+  display: none;
+}
+
+@container wg-transit (min-width: 870px) {
+  .wg-transit__layout--h {
+    display: block;
+  }
+
+  .wg-transit__layout--v {
+    display: none;
+  }
+}
+
+/* Each lane label's button (TransitLine.astro), laid over the label it names: no look of its own,
+   the lane lighting is its feedback; the site's ion ring when focused from the keyboard. The group
+   holding them covers the drawing without taking its pointer. */
+.wg-transit__lanes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.wg-lane-button {
+  pointer-events: auto;
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.wg-lane-button:focus-visible {
+  outline: 2px solid var(--color-ion);
+  outline-offset: 0;
+}
+
+.wg-lane__band {
+  fill: transparent;
+  transition: fill var(--dur-ui) var(--ease-ui);
+}
+
+.wg-lane__rule {
+  stroke: var(--color-deep-line);
+  stroke-dasharray: 2 6;
+}
+
+.wg-lane__bracket {
+  fill: none;
+  stroke: var(--color-line-strong);
+  stroke-width: 1.5;
+  transition: stroke var(--dur-ui) var(--ease-ui);
+}
+
+.wg-lane__name {
+  fill: var(--color-muted);
+  font-size: 15px;
+  font-weight: 620;
+  transition: fill var(--dur-ui) var(--ease-ui);
+}
+
+.wg-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wg-line--track {
+  stroke: rgb(165 185 211 / 14%);
+  stroke-width: 7;
+}
+
+.wg-line--lit,
+.wg-line--stretch {
+  stroke: var(--color-ion);
+  stroke-width: 3;
+  transition: opacity var(--dur-ui) var(--ease-ui);
+}
+
+.wg-line--stretch {
+  opacity: 0;
+}
+
+.wg-line--future {
+  stroke: var(--color-genome);
+  stroke-width: 3;
+  stroke-dasharray: 1.5 7;
+  transition: opacity var(--dur-ui) var(--ease-ui);
+}
+
+.wg-step__hex,
+.wg-hexmark {
+  fill: var(--enc-mean-4);
+  stroke: var(--color-void);
+  stroke-width: 1.5;
+  transition: opacity var(--dur-ui) var(--ease-ui);
+}
+
+.wg-step__label {
+  fill: var(--color-starlight);
+  font-size: 15px;
+  font-weight: 650;
+  transition: fill var(--dur-ui) var(--ease-ui);
+}
+
+.wg-station__art {
+  transition: opacity var(--dur-ui) var(--ease-ui);
+}
+
+.wg-station__ring {
+  fill: var(--color-plate);
+  stroke: var(--color-ion);
+  stroke-width: 2;
+  transition: stroke var(--dur-micro) var(--ease-ui);
+}
+
+.wg-station__icon path {
+  fill: none;
+  stroke: var(--color-ion);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke var(--dur-micro) var(--ease-ui);
+}
+
+.wg-station--future .wg-station__ring {
+  stroke: var(--color-genome);
+  stroke-dasharray: 3 3.5;
+}
+
+.wg-station--future .wg-station__icon path {
+  stroke: var(--color-genome);
+}
+
+.wg-station__label {
+  fill: var(--color-text-soft);
+  font-size: 15px;
+  font-weight: 560;
+  transition: fill var(--dur-ui) var(--ease-ui);
+}
+
+/* Studs are the Atlas's measured mark: a white disc on a void ring, never ramp-coloured. */
+.wg-stud {
+  fill: var(--enc-obs);
+}
+
+.wg-stud__ring {
+  fill: var(--enc-obs-ring);
+}
+
+.wg-token {
+  transition: opacity var(--dur-micro) var(--ease-ui);
+}
+
+.wg-token--hex path {
+  fill: var(--enc-mean-4);
+  stroke: var(--color-void);
+  stroke-width: 1.5;
+}
+
+.wg-token--hex.is-waiting {
+  opacity: 0;
+}
+
+/* Before the entrance (screens only: print shows the final state, spec §8). */
+@media screen {
+  .wg-transit.is-armed .wg-line--lit {
+    stroke-dasharray: 1 1;
+  }
+
+  .wg-transit.is-armed .wg-station.is-ahead .wg-station__ring {
+    stroke: var(--color-line-strong);
+  }
+
+  .wg-transit.is-armed .wg-station.is-ahead .wg-station__icon path {
+    stroke: var(--color-muted);
+  }
+}
+
+/* A group in focus lights its lane: its band tints, its stations and its own stretches of the
+   line stay at full strength, the other lanes' art drops to 32%. Text only changes colour
+   (faint is 5.8:1 on the plate), so it never drops below 4.5:1. */
+.wg-transit[data-active] .wg-station__art,
+.wg-transit[data-active] .wg-line--lit,
+.wg-transit[data-active] .wg-line--future,
+.wg-transit[data-active] .wg-step__hex,
+.wg-transit[data-active]:not([data-active='ui']) .wg-token {
+  opacity: 0.32;
+}
+
+.wg-transit[data-active] .wg-station__label,
+.wg-transit[data-active]:not([data-active='modeling']) .wg-step__label {
+  fill: var(--color-faint);
+}
+
+.wg-transit[data-active='data'] .wg-station[data-lane='data'] .wg-station__art,
+.wg-transit[data-active='modeling']
+  .wg-station[data-lane='modeling']
+  .wg-station__art,
+.wg-transit[data-active='ui'] .wg-station[data-lane='ui'] .wg-station__art,
+.wg-transit[data-active='ui'] .wg-line--future,
+.wg-transit[data-active='modeling'] .wg-step__hex,
+.wg-transit[data-active='data'] .wg-line--stretch[data-lane='data'],
+.wg-transit[data-active='modeling'] .wg-line--stretch[data-lane='modeling'],
+.wg-transit[data-active='ui'] .wg-line--stretch[data-lane='ui'] {
+  opacity: 1;
+}
+
+.wg-transit[data-active='data']
+  .wg-station[data-lane='data']
+  .wg-station__label,
+.wg-transit[data-active='modeling']
+  .wg-station[data-lane='modeling']
+  .wg-station__label,
+.wg-transit[data-active='ui'] .wg-station[data-lane='ui'] .wg-station__label {
+  fill: var(--color-starlight);
+}
+
+.wg-transit[data-active='data'] .wg-lane[data-lane='data'] .wg-lane__band,
+.wg-transit[data-active='modeling']
+  .wg-lane[data-lane='modeling']
+  .wg-lane__band,
+.wg-transit[data-active='ui'] .wg-lane[data-lane='ui'] .wg-lane__band {
+  fill: rgb(112 230 255 / 7%);
+}
+
+.wg-transit[data-active='data'] .wg-lane[data-lane='data'] .wg-lane__name,
+.wg-transit[data-active='modeling']
+  .wg-lane[data-lane='modeling']
+  .wg-lane__name,
+.wg-transit[data-active='ui'] .wg-lane[data-lane='ui'] .wg-lane__name {
+  fill: var(--color-ion);
+}
+
+.wg-transit[data-active='data'] .wg-lane[data-lane='data'] .wg-lane__bracket,
+.wg-transit[data-active='modeling']
+  .wg-lane[data-lane='modeling']
+  .wg-lane__bracket,
+.wg-transit[data-active='ui'] .wg-lane[data-lane='ui'] .wg-lane__bracket {
+  stroke: var(--color-ion);
+}
+
+/* ---------- the transit line's legend ---------- */
+
+.wg-transit__legend {
+  margin: 0;
+}
+
+/* ---------- start here ---------- */
+
+.start-links {
+  margin-top: var(--head-gap);
+}
+
+/* Offers that go by email rather than GitHub: a quiet row of links to the Contact page's draft,
+   each with its offer pressed. */
+.start-offers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 clamp(1.25rem, 3vw, 2.25rem);
+  margin: clamp(1.25rem, 2.5vw, 1.75rem) 0 0;
+}
+
+.start-offers__lead {
+  color: var(--color-muted);
+  font-size: var(--type-legend);
+  font-weight: 620;
+}
+
+.start-offers a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.start-offers .contribute-mark {
+  transition: translate var(--dur-micro) var(--ease-ui);
+}
+
+.start-offers a:hover .contribute-mark {
+  translate: 0.15rem 0;
+}
+
+/* ---------- phones and narrow columns ---------- */
+
+@media (max-width: 52rem) {
+  .contribute-head .contribute-h2,
+  .contribute-legend {
+    grid-column: 1 / -1;
+  }
+
+  .contribute-legend {
+    margin-top: 0.9rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  /* One link a line, under the lead-in, clear of the cookie control's corner. */
+  .start-offers {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .start-offers__lead {
+    margin-bottom: 0.25rem;
+  }
+}
+
+/* ---------- reduced motion, print, forced colours ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.wg-transit, .orbit, .contribute-more, .start-offers) *,
+  :is(.wg-transit, .orbit, .contribute-more, .start-offers) *::before,
+  :is(.wg-transit, .orbit, .contribute-more, .start-offers) *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .wg-transit {
+    --enc-obs: CanvasText;
+    --enc-obs-ring: Canvas;
+    --enc-obs-radius: CanvasText;
+  }
+
+  .wg-transit svg {
+    forced-color-adjust: none;
+  }
+
+  /* The orbit is an illustration: in forced colours it rests on the story's last frame (the page
+     never loads its motion; spec §8.9) and keeps its own night sky and colours, framed by the
+     plate, as a picture does; its words are all in the columns, in system colours. A hovered moon
+     lights in its own ion too: a light theme's Highlight is about 1.2:1 on the stage's navy
+     (review of the orbit's hover, finding 3). */
+  .orbit__stage,
+  .orbit-col__shot {
+    forced-color-adjust: none;
+    background-color: var(--color-plate);
+  }
+
+  .orbit-col__rule {
+    background: Highlight;
+  }
+
+  .orbit-col__status::before {
+    background: CanvasText;
+  }
+
+  .wg-line--lit,
+  .wg-line--stretch,
+  .wg-station__ring,
+  .wg-station__icon path,
+  .wg-lane__bracket {
+    stroke: CanvasText;
+  }
+
+  .wg-station__ring,
+  .wg-lane__band {
+    fill: Canvas;
+  }
+
+  .wg-lane__name,
+  .wg-station__label,
+  .wg-step__label {
+    fill: CanvasText;
+  }
+}

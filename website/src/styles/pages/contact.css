@@ -1,0 +1,1091 @@
+/*
+ * Contact (Contact page spec §4, #454). Owned by the Contact page; loaded after the shared CSS.
+ *
+ *   .contact-direct    under the intro, first on every screen: Email us (the Atlas pill's look at
+ *                      call-to-action size) and the address in view, with its copy glyph, on one
+ *                      row with their centres level (the pill on its own line on a phone)
+ *   .contact-templates the template section, a band of its own: the steps (1 what it's about,
+ *                      2 what you'd offer, 3 send it) left, the letter right; on a phone the steps,
+ *                      then the letter; the problem link last
+ *   .letter*           the live letter inside the kit Plate (ContactLetter.astro), with its copy
+ *                      glyph in the top-right corner (.letter-copy)
+ *
+ * What the letter shows follows the composer's `data-topic` and `data-offers`. A section opens or
+ * closes in --dur-ui, only once the visitor has changed something (`data-live`), and at once under
+ * reduced motion. The letter types itself out (letter-typing.ts): its words wait hidden until it is
+ * in view, then show a character at a time behind a caret; reduced motion, forced colours and
+ * print show it whole.
+ */
+
+/* ---------- the intro ---------- */
+
+/* The icons' sprite (ContactIcon.astro) takes no room. */
+.contact-icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* The only one-line H1 of the split intros: from 52rem to 72rem, where it may or may not fit its
+   seven columns, it always breaks evenly in two, so the intro keeps one shape across those widths
+   (design critique 2, m-2). */
+@media (width > 52rem) and (width <= 72rem) {
+  .contact-page .page-intro h1 {
+    /* 12ch in Raleway, in em so a fallback font breaks it where Raleway does (pages.css). */
+    max-width: 7.34em;
+    text-wrap: balance;
+  }
+}
+
+/* The lede is one short sentence (owner, 2026-10-15): its two lines break evenly beside the H1,
+   not a full line over two words. */
+.contact-page .page-intro--split .page-intro__lede {
+  text-wrap: balance;
+}
+
+/* The template band's own hairline is the one rule under the intro, not the intro's doubling it. */
+.contact-page .page-intro {
+  border-bottom: 0;
+}
+
+/* ---------- Email us and the address ---------- */
+
+/* Owner (2026-10-15): "make sure the 'Email us' button, the email, and the copy icon are all
+   aligned horizontally". Wherever the three fit on one line, they share one grid row, each centred
+   in it, so their centres are level whatever the fonts; a hint goes under the address, from its
+   left edge, and moves nothing in the row. Narrower (a phone), one column: the pill, then the
+   address and its glyph, then the hint. */
+.contact-reach {
+  container: contact-reach / inline-size;
+}
+
+.contact-direct:not([hidden]) {
+  display: grid;
+  justify-items: start;
+  align-items: center;
+  row-gap: 0.75rem;
+}
+
+@container contact-reach (width >= 30rem) {
+  .contact-direct:not([hidden]) {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: clamp(1.5rem, 3vw, 2.5rem);
+  }
+
+  .contact-direct .contact-hint {
+    grid-column: 2;
+  }
+}
+
+/* Email us: the Atlas pill's language at call-to-action size (Home's .atlas-open): a black pill in
+   an aurora rim with a still glow, a step larger, as the page's first action. */
+.contact-email {
+  position: relative;
+  isolation: isolate;
+  min-height: 3.5rem;
+  padding: 0.85rem 1.6rem 0.85rem 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 999px;
+  color: var(--color-starlight);
+  font-size: 1.15rem;
+  font-weight: 720;
+  line-height: 1.1;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow:
+    0 0 1.4rem rgb(114 231 193 / 16%),
+    0 0 2.4rem rgb(138 92 255 / 12%);
+  transition:
+    box-shadow var(--dur-ui) var(--ease-ui),
+    transform var(--dur-micro) var(--ease-ui);
+}
+
+.contact-email::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1.5px solid transparent;
+  border-radius: inherit;
+  background:
+    linear-gradient(#000, #000) padding-box,
+    linear-gradient(
+        100deg,
+        rgb(114 231 193 / 85%),
+        rgb(18 255 255 / 60%),
+        rgb(138 92 255 / 85%)
+      )
+      border-box;
+  content: '';
+}
+
+.contact-email__icon {
+  flex: none;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: var(--color-ion);
+}
+
+.contact-email:hover,
+.contact-email:focus-visible {
+  color: var(--color-starlight);
+  box-shadow:
+    0 0 1.8rem rgb(114 231 193 / 30%),
+    0 0 3rem rgb(138 92 255 / 24%);
+  transform: translateY(-1px);
+}
+
+.contact-email:focus-visible {
+  border-radius: 999px;
+  outline: 2px solid var(--color-starlight);
+  outline-offset: 4px;
+}
+
+/* Until a person is here the address is spelled out (contact.ts). Each of its places is a one-cell
+   grid that also holds an unseen copy of the spelled-out form, so the address, joined in its place,
+   keeps that box: the swap moves nothing, whatever the widths and line breaks. The copy is
+   generated content, not text: no selection, typing or assistive tech reads it. */
+[data-spelled] {
+  display: inline-grid;
+}
+
+[data-spelled]::before {
+  content: attr(data-spelled);
+  visibility: hidden;
+}
+
+[data-spelled]::before,
+[data-spelled] > * {
+  grid-area: 1 / 1;
+}
+
+/* The address and its copy glyph: never apart. The glyph's target reaches 0.5rem back into the
+   address's box, so the glyph starts about a third of an em after its last letter (a little more
+   where the renderer rounds each glyph to whole pixels, as Linux's does). Its "Copied" is
+   the row's, beside the glyph (under it on a narrow phone), so the button keeps its own box. */
+.contact-address {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.contact-address .contact-glyph {
+  margin-left: -0.5rem;
+}
+
+.contact-address__value {
+  color: var(--color-starlight);
+  font-size: var(--type-lede);
+  font-weight: 620;
+  /* In px for both forms (1.65em of the lede), so the swap keeps the line's height. */
+  line-height: 1.65em;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* Spelled out, the line sets the address a step smaller: its box (the unseen copy) is then 1 to 2
+   per cent wider than the address will be (the address is 0.729 of the spelled-out width in
+   Figtree, 0.726 in the Arial-based fallback, 0.722 in Avenir Next), so the glyph keeps its place
+   when the address is joined, and sits close to it, in every font. */
+.contact-address__value::before,
+.contact-address__value > :not([data-joined]) {
+  font-size: 0.735em;
+}
+
+/* The two copy glyphs, the address's and the letter's, one control (the owner, 2026-10-15; rulings
+   22 and 35): no outline, no fill, no word, a 44 px target around a 20 px glyph. Hover turns the
+   glyph ion and changes nothing else; the ring shows on keyboard focus only. Pressed, the glyph is
+   a check with "Copied" beside it for a moment (contact.ts), outside the button's box, so its size
+   never changes and nothing moves. */
+.contact-glyph {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-soft);
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--dur-micro) var(--ease-ui);
+}
+
+.contact-glyph:hover,
+.contact-glyph[data-confirmed] {
+  color: var(--color-ion);
+}
+
+.contact-glyph:focus-visible {
+  outline: 2px solid var(--color-ion);
+  outline-offset: 0;
+}
+
+.contact-glyph .contact-icon {
+  grid-area: 1 / 1;
+}
+
+.contact-glyph__word {
+  position: absolute;
+  top: 50%;
+  left: calc(100% - 0.4rem);
+  translate: 0 -50%;
+  color: var(--color-ion);
+  font-size: 0.85rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.contact-glyph__check,
+.contact-glyph__word,
+.contact-glyph[data-confirmed] .contact-glyph__idle {
+  visibility: hidden;
+}
+
+.contact-glyph[data-confirmed] :is(.contact-glyph__check, .contact-glyph__word),
+.contact-glyph[data-confirmed] + .contact-glyph__word {
+  visibility: visible;
+}
+
+/* Guidance on how to carry on, under the control it follows, only when there is some. After a
+   mailto: click its line is laid out at once and unseen (`data-pending`): shown 1.5 s on, if no
+   app took the page, it moves nothing then (contact.ts). */
+.contact-hint {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.contact-hint[data-pending] {
+  visibility: hidden;
+}
+
+/* It breaks evenly, so the address keeps whole parts on a phone ("genome-os [dot] org."). */
+.contact-noscript {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: var(--type-lede);
+  text-wrap: balance;
+}
+
+.contact-noscript strong {
+  color: var(--color-starlight);
+  font-weight: 620;
+}
+
+@media (width <= 30rem) {
+  /* As Home's .atlas-open does on a phone: the whole width. */
+  .contact-email {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* A narrow phone has no room beside the address's glyph: "Copied" shows under it, its end at the
+   glyph's target's end. */
+@media (width <= 24rem) {
+  .contact-address > .contact-glyph__word {
+    top: calc(100% - 0.2rem);
+    right: 0.25rem;
+    left: auto;
+    translate: none;
+  }
+}
+
+/* ---------- the template section ---------- */
+
+/* Without JavaScript only the problem link is left in the band: no empty band above it. */
+.contact-templates:has(.contact[hidden]) {
+  padding-top: 0;
+}
+
+/* A section head, set like Contribute's plate-bar H2s (.orbit__title, about 37 px at 1440): at the
+   h3 size it read as a caption (design critique 3). The step numbers below keep their size. */
+.contact-templates__title {
+  margin: 0;
+  color: var(--color-starlight);
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+/* Until Raleway has loaded, the heading waits unseen (contact-paint.ts), never jumping as it swaps. */
+.contact-templates__title[data-font-pending] {
+  visibility: hidden;
+}
+
+/* The steps, then the letter; from 60rem the steps left and the letter right, level at the top. */
+.contact:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: clamp(1.5rem, 4vw, 2rem);
+  align-items: start;
+}
+
+@media (width > 60rem) {
+  .contact:not([hidden]) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--grid-gap);
+    row-gap: var(--head-gap);
+  }
+
+  .contact-templates__title {
+    grid-column: 1 / -1;
+  }
+
+  /* A margin, not padding, keeps the column's hairlines as wide as its controls. */
+  .contact .contact__controls {
+    grid-column: 1 / span 5;
+    margin-right: clamp(0rem, 2vw, 2rem);
+  }
+
+  .contact .contact-letter {
+    grid-column: 6 / -1;
+  }
+}
+
+/* Up to 72rem five columns are narrower than the steps need: the split is even there (design
+   critique 2, m-6). */
+@media (width > 60rem) and (width <= 72rem) {
+  .contact .contact__controls {
+    grid-column: 1 / span 6;
+  }
+
+  .contact .contact-letter {
+    grid-column: 7 / -1;
+  }
+}
+
+@media (width > 80rem) {
+  .contact .contact__controls {
+    margin-right: 0;
+  }
+
+  .contact .contact-letter {
+    grid-column: 7 / -1;
+  }
+}
+
+/* While a long letter is read beside them, the steps stay in view, with Open draft, where the
+   screen is tall enough to hold them whole. */
+@media (width > 60rem) and (height > 44rem) {
+  .contact .contact__controls {
+    position: sticky;
+    top: calc(var(--site-header-height) + 1.5rem);
+  }
+}
+
+/* ---------- the steps ---------- */
+
+.contact__controls {
+  --step-gap: clamp(1.5rem, 3vw, 2rem);
+  container: contact-controls / inline-size;
+}
+
+.contact-step {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.contact-step__label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  color: var(--color-starlight);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+/* Each step's number, from its markup (a container's style containment scopes counters), and
+   Send it is 2 when there is nothing to offer. */
+.contact-step__number {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--color-ion);
+  color: var(--color-ion);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.contact-step__number::before {
+  content: attr(data-number);
+}
+
+.contact:not([data-topic='contribute'])
+  [data-step='send']
+  .contact-step__number::before {
+  content: '2';
+}
+
+[data-step='send'] {
+  margin-top: var(--step-gap);
+}
+
+/* 1 What it's about: a segmented control with real radio semantics and an icon to each purpose,
+   two by two (one column in a narrow column, so no label ever wraps). Hairlines between the
+   segments are the grid's own gaps. */
+.contact-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-line-strong);
+}
+
+.contact-choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--color-void);
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  font-weight: 620;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-micro) var(--ease-ui),
+    color var(--dur-micro) var(--ease-ui);
+}
+
+.contact-choice input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.contact-choice__icon {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.contact-choice:hover {
+  color: var(--color-starlight);
+}
+
+.contact-choice:has(input:checked) {
+  background: var(--color-plate-raised);
+  color: var(--color-starlight);
+  box-shadow: inset 0 -2px 0 var(--color-ion);
+}
+
+.contact-choice:has(input:checked) .contact-choice__icon {
+  color: var(--color-ion);
+}
+
+.contact-choice:has(input:focus-visible) {
+  z-index: 1;
+  outline: 2px solid var(--color-ion);
+  outline-offset: 2px;
+  box-shadow:
+    inset 0 -2px 0 var(--color-ion),
+    var(--focus-ring);
+}
+
+@container contact-controls (width < 470px) {
+  .contact-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A stacked list marks its choice with a square ion rule at the side, as the docs sidebar does. */
+  .contact-choice:has(input:checked) {
+    box-shadow: inset 3px 0 0 var(--color-ion);
+  }
+}
+
+/* 2 What you'd offer: independent toggle buttons, shown for a contribution only. */
+.contact-offers {
+  display: grid;
+  grid-template-rows: 1fr;
+  --contact-reveal-delay: 0s;
+}
+
+/* The clip's padding, taken back by its margin, keeps the buttons' focus rings unclipped. */
+.contact-offers__clip {
+  min-height: 0;
+  margin: -0.4rem;
+  padding: 0.4rem;
+  overflow: hidden;
+}
+
+/* The step's own gap, inside what collapses, so it goes with the step. */
+[data-step='offers'] {
+  padding-top: var(--step-gap);
+}
+
+.contact:not([data-topic='contribute']) .contact-offers {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  --contact-reveal-delay: var(--dur-ui);
+}
+
+.contact-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.contact-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.4rem 0.75rem 0.4rem 0.45rem;
+  border: 1px solid var(--color-line-strong);
+  background: rgb(2 7 18 / 70%);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 620;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-micro) var(--ease-ui),
+    border-color var(--dur-micro) var(--ease-ui),
+    color var(--dur-micro) var(--ease-ui);
+}
+
+/* The offer's icon in a square that fills when it is pressed: pressed and not differ in fill, not
+   in colour alone. */
+.contact-toggle__mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  transition:
+    background-color var(--dur-micro) var(--ease-ui),
+    color var(--dur-micro) var(--ease-ui);
+}
+
+.contact-toggle__mark .contact-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.contact-toggle:hover {
+  color: var(--color-starlight);
+}
+
+.contact-toggle[aria-pressed='true'] {
+  border-color: var(--color-ion);
+  background: var(--color-plate-raised);
+  color: var(--color-starlight);
+}
+
+.contact-toggle[aria-pressed='true'] .contact-toggle__mark {
+  background: var(--color-ion);
+  color: var(--color-void);
+}
+
+/* 3 Send it: Home's button metrics (its .button-link; design critique 2, m-4), so the site has
+   one button size. The line height is tighter than Home's, for the label that takes two lines on
+   the narrowest phones. */
+.contact-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3.25rem;
+  margin: 0;
+  padding: 0.68rem 1.1rem;
+  border: 1px solid var(--color-ion);
+  background: var(--color-ion);
+  color: var(--color-void);
+  font: inherit;
+  font-size: 1.08rem;
+  font-weight: 720;
+  line-height: 1.25;
+  /* On the narrowest phones the label takes two even lines, beside its arrow. */
+  text-align: left;
+  text-wrap: balance;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-micro) var(--ease-ui),
+    border-color var(--dur-micro) var(--ease-ui),
+    color var(--dur-micro) var(--ease-ui);
+}
+
+.contact-button:hover {
+  border-color: var(--color-starlight);
+  background: var(--color-starlight);
+  color: var(--color-void);
+}
+
+.contact-button__arrow {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: translate var(--dur-micro) var(--ease-ui);
+}
+
+.contact-button:hover .contact-button__arrow {
+  translate: 0.15rem 0;
+}
+
+[data-step='send'] .contact-hint {
+  margin-top: 0.6rem;
+}
+
+/* ---------- the problem link, last ---------- */
+
+.contact-problem {
+  margin: var(--head-gap) 0 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.contact-problem a {
+  font-weight: 620;
+}
+
+@media (width <= 60rem) {
+  /* A 44 px target on touch screens, as the composer's own controls: the padding makes the link's
+     line (1.5em, as the paragraph's) 2.75rem tall, and the text keeps one underline. */
+  .contact-problem a {
+    display: inline-block;
+    padding-block: calc((2.75rem - 1.5em) / 2);
+  }
+}
+
+/* ---------- the letter ---------- */
+
+/* The caption starts on the letter's own left edge (design critique 1, m-1). */
+.contact-letter {
+  --letter-inset: clamp(1rem, 3vw, 2.25rem);
+  --letter-pad: clamp(1.1rem, 3vw, 2rem);
+}
+
+/* The To line starts below the copy glyph's target (.letter-copy, 4 px to 48 px down). */
+.contact-letter .kit-plate__stage {
+  position: relative;
+  padding: max(var(--letter-pad), 42px) var(--letter-inset) var(--letter-pad);
+}
+
+.contact-letter .kit-plate__bar {
+  padding-inline: var(--letter-inset);
+}
+
+/* A caption that wraps on a phone keeps two words on its last line. */
+.contact-letter > figcaption {
+  text-wrap: pretty;
+}
+
+/* The letter's copy glyph (.contact-glyph) in the plate's top-right corner, 16 px in from both
+   edges. The To line starts below it, so nothing of the letter runs under it, and it never moves:
+   the letter's typing moves nothing. "Copied" shows to the left of its check. */
+.letter-copy {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  right: 4px;
+}
+
+.letter-copy .contact-glyph__word {
+  right: calc(100% - 0.4rem);
+  left: auto;
+}
+
+/* Where the clipboard is blocked: the letter selected, and this line at its top, clear of the
+   glyph, says which keys copy it. */
+.letter-hint {
+  margin: 0 0 0.85rem;
+  padding-right: 48px;
+}
+
+.letter {
+  container: letter / inline-size;
+  color: var(--color-text-soft);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+/* To and Subject share one label column, as wide as "Subject", so a phone keeps the room for the
+   values. */
+.letter__head {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: clamp(0.85rem, 2.5vw, 1.75rem);
+  margin: 0 0 1.35rem;
+  border-bottom: 1px solid var(--color-deep-line);
+}
+
+.letter__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: 0.5rem 0;
+}
+
+.letter__row + .letter__row {
+  border-top: 1px solid var(--color-deep-line);
+}
+
+.letter__row dt {
+  color: var(--color-faint);
+  font-weight: 600;
+}
+
+/* A value that wraps (the subject on a phone, every offer at 1024) breaks evenly, never leaving
+   "genomeOS" or an offer alone on its last line (design critique 2, m-1). */
+.letter__row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-starlight);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+/* A narrow letter (a 320 px phone) sets each label above its value, so "genomeOS Foundation" and
+   the subject keep the whole measure (design critique 1, m-8). */
+@container letter (width < 300px) {
+  .letter__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .letter__row dt {
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+}
+
+.letter__para {
+  margin: 0;
+  padding-top: 1.05em;
+}
+
+.letter__body > .letter__para:first-child {
+  padding-top: 0;
+}
+
+/* No line of the letter ends on one word alone (design critique 1, m-4). The greeting and the
+   opening, a line or two that wrap on a phone, split evenly, as `pretty` leaves "genomeOS." alone
+   on some (design critique 2, m-1). */
+.letter__line {
+  display: block;
+  text-wrap: pretty;
+}
+
+.letter__para--balanced .letter__line {
+  text-wrap: balance;
+}
+
+.letter__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-starlight);
+  font-weight: 650;
+}
+
+/* The offer's icon, as on its toggle. */
+.letter__icon {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--color-ion);
+}
+
+/* A field to fill in: its dash, its label, then a dotted leader to the edge. The dash keeps to the
+   label's first line; the leader runs on from the label's last word, so a label that wraps ends
+   in its leader (design critique 1, I-1). The leader is an inline block as wide as the label that
+   takes no room on its line (its margins cancel its width), clipped at the label's edge; the
+   label's end padding keeps at least 1.25rem of it in view. */
+.letter__field {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.letter__dash {
+  flex: none;
+  color: var(--color-faint);
+}
+
+.letter__label {
+  flex: 1 1 0%;
+  min-width: 0;
+  padding-right: 1.65rem;
+  overflow: clip;
+}
+
+.letter__leader {
+  display: inline-block;
+  width: 100%;
+  margin: 0 calc(-100% - 0.4rem) 0 0.4rem;
+  border-bottom: 1px dotted var(--color-line-strong);
+}
+
+/* Sections: shown for their offer or purpose, collapsed otherwise. */
+.letter__section {
+  display: grid;
+  grid-template-rows: 1fr;
+  --contact-reveal-delay: 0s;
+}
+
+.letter__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.contact:not([data-topic='contribute']) .letter__section[data-offer-section],
+.contact:not([data-offers~='code']) .letter__section[data-section='code'],
+.contact:not([data-offers~='data']) .letter__section[data-section='data'],
+.contact:not([data-offers~='expertise'])
+  .letter__section[data-section='expertise'],
+.contact:not([data-offers~='funding']) .letter__section[data-section='funding'],
+.contact:not([data-topic='question']) .letter__section[data-section='question'],
+.contact:not([data-topic='partner']) .letter__section[data-section='partner'],
+.contact:not([data-topic='press']) .letter__section[data-section='press'] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  --contact-reveal-delay: var(--dur-ui);
+  /* Paged print keeps a collapsed row's height, so print drops the section (below). */
+  --letter-print-display: none;
+}
+
+/* Each purpose's opening and subject; a contribution's carry its offers. */
+.contact:not([data-topic='contribute']) [data-for-topic='contribute'],
+.contact:not([data-topic='question']) [data-for-topic='question'],
+.contact:not([data-topic='partner']) [data-for-topic='partner'],
+.contact:not([data-topic='press']) [data-for-topic='press'] {
+  display: none;
+}
+
+/* Motion only once the visitor has changed something: the offers grow and collapse, and the
+   letter's sections open and close (visibility flips at the end of a closing, at the start of an
+   opening). A section's words are typed in, or leave at once as it closes: none fades, as a word
+   half faded is text at low contrast (ruling 25). */
+.contact[data-live] .contact-offers {
+  transition:
+    grid-template-rows var(--dur-ui) var(--ease-ui),
+    opacity var(--dur-ui) var(--ease-ui),
+    visibility 0s linear var(--contact-reveal-delay);
+}
+
+.contact[data-live] .letter__section {
+  transition:
+    grid-template-rows var(--dur-ui) var(--ease-ui),
+    visibility 0s linear var(--contact-reveal-delay);
+}
+
+/* ---------- the letter typing itself out (letter-typing.ts) ---------- */
+
+/* Until it is in view, the letter waits with its words hidden, the head's labels and rules an empty
+   draft to type into; it takes its full size from the start. */
+.letter[data-typing='pending'] :is(.letter__row dd, .letter__body) {
+  opacity: 0;
+}
+
+/* A character shows once its line's --n passes it; the caret, a 2 px ion bar after the last one
+   shown, is a box-shadow, not the kit's positioned ::after (scenes.css), so a typing line breaks
+   exactly where its plain text does. Each character is shown or not: none is ever half faded. */
+.letter__typed > span {
+  --shown: clamp(0, calc(var(--n) - var(--i)), 1);
+  --caret: clamp(0, calc(2 - var(--n) + var(--i)), 1);
+  opacity: var(--shown);
+  box-shadow: calc((2px + 0.1em) * var(--shown) * var(--caret)) 0 0 -0.1em
+    var(--color-ion);
+}
+
+/* An offer's icon shows with its heading's first character; a field's leader draws out from the
+   left once its label is typed (letter-typing.ts animates it). */
+[data-typing-line] .letter__icon {
+  opacity: clamp(0, var(--n), 1);
+}
+
+.letter__leader {
+  transform-origin: 0 50%;
+}
+
+/* Reduced motion, forced colours and print: the letter whole, without a caret, at any moment. */
+@media (prefers-reduced-motion: reduce), (forced-colors: active), print {
+  .letter[data-typing] :is(.letter__row dd, .letter__body),
+  .letter__typed > span,
+  [data-typing-line] .letter__icon {
+    opacity: 1;
+  }
+
+  .letter__typed > span {
+    box-shadow: none;
+  }
+
+  [data-typing-line] .letter__leader {
+    transform: none !important;
+  }
+}
+
+/* ---------- reduced motion, forced colours, print ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .contact-page *,
+  .contact-page *::before,
+  .contact-page *::after {
+    transition: none !important;
+  }
+}
+
+/* Forced colours: the chosen purpose and pressed offers fill with the system's selected-item
+   colours, so the outline stays the focus ring alone and still shows on a selected control. The
+   purposes' hairlines are the grid's own gaps, drawn in the system's text colour. */
+@media (forced-colors: active) {
+  .contact-choices {
+    background-color: CanvasText;
+  }
+
+  /* Kept as set, so no Canvas text backplate sits between SelectedItem and SelectedItemText (in a
+     dark theme that hides the label); every colour in them is a system colour. */
+  .contact-choice:has(input:checked),
+  .contact-toggle[aria-pressed='true'] {
+    forced-color-adjust: none;
+    background-color: SelectedItem;
+    color: SelectedItemText;
+    box-shadow: none;
+  }
+
+  .contact-toggle[aria-pressed='true'] {
+    border-color: SelectedItem;
+  }
+
+  .contact-choice:has(input:checked) .contact-choice__icon {
+    color: SelectedItemText;
+  }
+
+  .letter__icon {
+    color: CanvasText;
+  }
+
+  .contact-glyph,
+  .contact-glyph[data-confirmed] {
+    color: ButtonText;
+  }
+
+  /* The pressed offer's square fills in the selected item's text colour, its icon cut out of it. */
+  .contact-toggle[aria-pressed='true'] .contact-toggle__mark {
+    background-color: SelectedItemText;
+    color: SelectedItem;
+  }
+
+  /* Their focus ring, in Highlight as forced colours draw every other one. */
+  .contact-choice:has(input:checked:focus-visible),
+  .contact-toggle[aria-pressed='true']:focus-visible {
+    outline-color: Highlight;
+  }
+
+  /* The aurora rim is decoration; a plain system-coloured border marks Email us, as the Atlas
+     pill's does. */
+  .contact-email {
+    border: 1px solid LinkText;
+  }
+
+  .contact-button {
+    border: 2px solid ButtonText;
+  }
+}
+
+/* Print: the intro with the address, and the letter, in dark type on white, also with background
+   graphics on (the header and footer keep their own grounds); Email us, the copy button, the steps
+   and the problem link stay on screen. Without JavaScript, the spelled-out address prints in the
+   address's place (review 3, N-3). */
+@media print {
+  :root:has(.contact-page),
+  body:has(.contact-page),
+  .contact-page :is(.page-intro, .contact-templates, .contact-letter) {
+    background: #fff;
+  }
+
+  .contact-page {
+    color-scheme: light;
+  }
+
+  .contact-page :is(h1, h2, p, dt, dd, span, strong) {
+    color: #111 !important;
+  }
+
+  .contact-email,
+  .contact-glyph,
+  .contact-hint,
+  .contact-templates__title,
+  .contact__controls,
+  .contact-problem {
+    display: none;
+  }
+
+  .contact-templates {
+    padding-block: 1rem 0;
+    border-top: 0;
+  }
+
+  .contact:not([hidden]) {
+    display: block;
+  }
+
+  /* A long draft (every offer) runs on to a second page between the letter's parts, never inside
+     one, so it starts under the intro instead of leaving page 1 with the intro alone. The caption
+     stays with the sign-off. */
+  .letter__head,
+  .letter__para {
+    break-inside: avoid;
+  }
+
+  .contact-letter > figcaption {
+    break-before: avoid;
+  }
+
+  /* The plate's corner ticks are a positioned overlay: printed without background graphics, it
+     comes out as a white sheet over the plate's frame and its caption. */
+  .contact-page .contact-letter::before {
+    display: none;
+  }
+
+  /* Only the sections the draft holds: on paper a collapsed one would keep its height. */
+  .letter__section {
+    display: var(--letter-print-display, grid);
+  }
+
+  .letter__leader {
+    border-bottom-color: #999;
+  }
+}

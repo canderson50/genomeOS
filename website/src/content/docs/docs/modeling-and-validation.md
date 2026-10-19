@@ -10,8 +10,8 @@ making uncertainty and unsupported regions first-class results.
 
 ## More than one model class
 
-Brian leads the Bayesian spatial modeling line. The working group also welcomes geometric deep
-learning and other statistically defensible approaches. Models compete on scientific acceptance
+The [working group](../../contribute/#working-groups) builds Bayesian spatial models and welcomes
+geometric deep learning and other statistically defensible approaches. Models compete on scientific acceptance
 evidence rather than on visual smoothness or novelty.
 
 ## One shared result format
@@ -30,7 +30,9 @@ and measured carrier-screening rates. Calibration, prediction in locations withh
 training, statistical diagnostics, correction for how participants were recruited, and stability
 all matter. A model that cannot beat an appropriate baseline or reproduce known science is refused.
 
-The current inference decision is PyMC with a Hilbert-space Gaussian process. Read
-<a href="https://github.com/bschilder/genomeOS/issues/34" target="_blank" rel="noopener noreferrer">Issue #34</a> before proposing a different runtime,
-and use the <a href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific objectives</a>
+Models are fitted with PyMC rather than INLA. Issue #34 chose a Hilbert-space Gaussian process
+approximation. The published surfaces and the HbS validation run instead use an inducing-point
+Gaussian process on an H3 grid over the sphere (#105), with a beta-binomial likelihood. Read
+<a href="https://github.com/genomeOS/genomeOS/issues/34" target="_blank" rel="noopener noreferrer">Issue #34</a> before proposing a different runtime,
+and use the <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific objectives</a>
 to keep alternative models on the same acceptance contract.
