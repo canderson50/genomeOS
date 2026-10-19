@@ -349,8 +349,10 @@ that #34 chose remains available.
   ([#53](https://github.com/genomeOS/genomeOS/issues/53)), with artifact staging and
   data-version pinning on [GCS](https://cloud.google.com/storage)
   ([#33](https://github.com/genomeOS/genomeOS/issues/33)). Until those land, fits run as offline
-  PyMC jobs on a workstation or a GPU pod, and the immutable artifacts are committed under
-  `data/store/` ([`data-store.md`](data-store.md)).
+  PyMC jobs on a workstation or a GPU pod. Published data is not in git: it lives in the public
+  data store on GCS ([#468](https://github.com/genomeOS/genomeOS/issues/468)) as immutable,
+  release-versioned objects, and git keeps one sha256 manifest per release
+  ([`data-store.md`](data-store.md)).
 - **Read tier:** [Cloud Run](https://cloud.google.com/run) + [DuckDB](https://duckdb.org/) over
   [Parquet](https://parquet.apache.org/), indexed by [H3](https://h3geo.org/). A diagnostic read
   path is deployed ([#147](https://github.com/genomeOS/genomeOS/pull/147)): it serves the MAP
@@ -360,7 +362,9 @@ that #34 chose remains available.
 - **Client:** a CesiumJS globe in the Astro site at [genome-os.org](https://genome-os.org). It
   replaced the original Next.js + deck.gl + MapLibre plan
   ([Cesium explorer design](superpowers/specs/2026-09-06-cesium-globe-explorer-design.md)). It
-  reads a static, versioned export of the artifacts and does not call the read path yet.
+  reads a static, versioned export of the artifacts, served since
+  [#437](https://github.com/genomeOS/genomeOS/pull/437) from a public web-data bucket rather than
+  the read path's, and does not call the read path yet.
 
 **Boundary rules that make this maintainable:** P2 and P3 are pure offline functions,
 deterministic given `(config, data_version, seed)` — all science lives there, and both are unit

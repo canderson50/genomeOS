@@ -50,14 +50,15 @@ Status `Ready` means fully specified and unblocked. Take it without asking.
 
 ## Before you open a pull request
 
-Run every gate below; the PR template lists them too. CI runs all of them, plus three checks
-that need its own environment:
+Run every gate below; the PR template lists them too. CI runs all of them, except that a pull
+request changing only paths its Python job never reads, such as prose under `docs/`, skips that
+job ([#470](https://github.com/genomeOS/genomeOS/pull/470)). It also runs three checks that need
+its own environment:
 
 - that the coverage badge is current;
 - a container build with an HTTP smoke test;
-- for changes the `pages` workflow watches (`website/`, `genomeos/publication/`,
-  `scripts/encode_atlas_web.py`, `pyproject.toml`, `requirements.lock`), the website gates,
-  including a check that the committed Atlas catalog is exactly what the encoder writes.
+- for changes the `pages` workflow watches (its `paths` filter), the website gates in
+  `.github/workflows/pages.yml`.
 
 ```bash
 python -m pip install -e '.[dev,atlas,surfaces,geo,figures]'
