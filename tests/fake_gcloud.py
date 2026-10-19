@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Stateful stand-in for the gcloud CLI in the Atlas web bucket tests (design 2026-10-07 §C.3).
 
-It implements exactly the commands scripts/provision_atlas_web_bucket.py and
-scripts/publish_atlas_web.py issue and exits 2 on anything else, so a script that drifts to an
+It implements exactly the commands scripts/provision_atlas_web_bucket.py,
+scripts/publish_atlas_web.py, scripts/provision_data_store_bucket.py and scripts/publish_data_store.py
+issue; the IAM, Pub/Sub, Cloud Functions and billing commands of the budget kill switch and the
+data-store publisher are in tests/fake_gcloud_platform.py, which shares this state file. It exits 2 on
+anything else, so a script that drifts to an
 untested command fails its tests instead of passing them. Error text mirrors gcloud 498's formats
 ("gs://… not found: 404.", "HTTPError 412: …"). State is the JSON file named by FAKE_GCLOUD_STATE;
 every invocation is appended to the JSON-lines file named by FAKE_GCLOUD_LOG with the CLOUDSDK_CONFIG
-it saw, which proves the call went through scripts/gcloud_repo.py.
+it saw, which proves the call went through scripts/gcloud_repo.py, and the service account it was told
+to impersonate (CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT), if any.
 
 State keys: buckets{name: resource + "bindings"}, objects{"bucket/name": resource + "data_b64"},
 org_policies{constraint: policy}, org_policy_errors[constraint], race{"bucket/name": resource},
@@ -25,6 +29,8 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
+
+import fake_gcloud_platform  # tests/, beside this file: the script's own directory is on sys.path
 
 UNSUPPORTED = 2
 DESCRIBE_FLAGS = {"raw": "", "format": "json"}
@@ -181,6 +187,8 @@ def _bucket_update(state: dict[str, Any], url: str, flags: dict[str, str]) -> in
         "uniform-bucket-level-access",
         "no-public-access-prevention",
         "no-versioning",
+        "versioning",
+        "soft-delete-duration",
         "update-labels",
     }
     if not flags or not set(flags) <= allowed:
@@ -204,6 +212,14 @@ def _bucket_update(state: dict[str, Any], url: str, flags: dict[str, str]) -> in
         iam["publicAccessPrevention"] = "inherited"
     if "no-versioning" in flags:
         found["versioning"] = {"enabled": False}
+    if "versioning" in flags:
+        found["versioning"] = {"enabled": True}
+    if "soft-delete-duration" in flags:
+        value = flags["soft-delete-duration"]
+        units = {"d": 86400, "h": 3600, "s": 1}
+        if not value[:-1].isdigit() or value[-1] not in units:
+            return _unsupported(["storage", "buckets", "update", url], flags)
+        found["softDeletePolicy"] = {"retentionDurationSeconds": str(int(value[:-1]) * units[value[-1]])}
     return 0
 
 
@@ -245,6 +261,23 @@ def _iam_add(state: dict[str, Any], url: str, flags: dict[str, str]) -> int:
             return 0
     bindings.append({"role": flags["role"], "members": [flags["member"]]})
     return 0
+
+
+def _iam_remove(state: dict[str, Any], url: str, flags: dict[str, str]) -> int:
+    if set(flags) != {"member", "role"}:
+        return _unsupported(["storage", "buckets", "remove-iam-policy-binding", url], flags)
+    found = _bucket(state, url)
+    if found is None:
+        return _fail(f"(gcloud.storage.buckets.remove-iam-policy-binding) {url} not found: 404.")
+    for binding in found.get("bindings", []):
+        if binding["role"] == flags["role"] and flags["member"] in binding["members"]:
+            binding["members"].remove(flags["member"])
+            found["bindings"] = [item for item in found["bindings"] if item["members"]]
+            return 0
+    return _fail(
+        "(gcloud.storage.buckets.remove-iam-policy-binding) Policy binding with the specified "
+        "principal, role, and condition not found!"
+    )
 
 
 def _org_policy(state: dict[str, Any], constraint: str, flags: dict[str, str]) -> int:
@@ -321,6 +354,8 @@ def _dispatch(state: dict[str, Any], positional: list[str], flags: dict[str, str
             return _iam_get(state, url, flags)
         case ["storage", "buckets", "add-iam-policy-binding", url]:
             return _iam_add(state, url, flags)
+        case ["storage", "buckets", "remove-iam-policy-binding", url]:
+            return _iam_remove(state, url, flags)
         case ["org-policies", "describe", constraint]:
             return _org_policy(state, constraint, flags)
         case ["projects", "describe", project]:
@@ -330,13 +365,18 @@ def _dispatch(state: dict[str, Any], positional: list[str], flags: dict[str, str
         case ["compute", collection, "create", name]:
             return _compute_create(state, collection, name, flags)
         case _:
-            return _unsupported(positional, flags)
+            return fake_gcloud_platform.dispatch(state, positional, flags)
 
 
 def main(argv: list[str]) -> int:
     state_path = Path(os.environ["FAKE_GCLOUD_STATE"])
     with open(os.environ["FAKE_GCLOUD_LOG"], "a", encoding="utf-8") as log:
-        log.write(json.dumps({"argv": argv, "cloudsdk_config": os.environ.get("CLOUDSDK_CONFIG")}) + "\n")
+        record = {
+            "argv": argv,
+            "cloudsdk_config": os.environ.get("CLOUDSDK_CONFIG"),
+            "impersonate": os.environ.get("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT"),
+        }
+        log.write(json.dumps(record) + "\n")
     state = json.loads(state_path.read_text(encoding="utf-8"))
     positional, flags = _split(argv)
     code = _dispatch(state, positional, flags)
