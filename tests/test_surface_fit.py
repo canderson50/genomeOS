@@ -400,18 +400,23 @@ def test_sub_micrometre_distance_noise_cannot_change_the_chosen_cells(monkeypatc
     order (which indexes the inducing field), must not move.
     """
     import genomeos.geo.h3util as h3util
+    import genomeos.surfaces.fit as fit
 
     lat, lon, _ = _collocated_geometry()
     expected = h3_inducing_points(lat, lon, 16, reach_km=1500.0)
 
-    exact = h3util._haversine_km
     rng = np.random.default_rng(noise_seed)
 
-    def noisy(*args):
-        distance = np.asarray(exact(*args), dtype=float)
-        return distance + rng.uniform(-1e-10, 1e-10, size=distance.shape)
+    def noisy(exact):
+        def perturbed(*args):
+            distance = np.asarray(exact(*args), dtype=float)
+            return distance + rng.uniform(-1e-10, 1e-10, size=distance.shape)
 
-    monkeypatch.setattr(h3util, "_haversine_km", noisy)
+        return perturbed
+
+    # Both distances: candidate-to-observation ranking and the maximin spacing scores.
+    monkeypatch.setattr(h3util, "_haversine_km", noisy(h3util._haversine_km))
+    monkeypatch.setattr(fit, "_great_circle_km", noisy(fit._great_circle_km))
     assert np.array_equal(h3_inducing_points(lat, lon, 16, reach_km=1500.0), expected)
 
 
@@ -435,6 +440,87 @@ def test_clearly_nearer_candidates_are_kept_before_any_tie_is_settled():
     chosen = _as_cells(h3_inducing_points(lat, lon, 70, reach_km=1500.0))
     assert len(chosen) == 70
     assert set(collocated) <= set(chosen)
+
+
+def test_an_antipodal_candidate_is_scored_by_its_true_distance_not_nan(monkeypatch):
+    """The res-4 grid has exact antipodes, where an unclipped haversine can return NaN.
+
+    `84eaf35ffffffff` is antipodal to the kept `84090cbffffffff` but sits 40.5 km from the kept
+    `84eaf37ffffffff`, so its true score is tiny. A NaN score survives `np.minimum` and wins
+    `argmax`, picking it over a candidate ~9,600 km from anything kept (#399). Whether the shared
+    haversine returns NaN there is last-ulp, so this platform's libm may not; returning NaN for
+    antipodes stands in for one that does.
+    """
+    import h3
+
+    import genomeos.geo.h3util as h3util
+    from genomeos.surfaces.fit import _maximin_fill
+
+    exact = h3util._haversine_km
+
+    def nan_at_antipodes(*args):
+        distance = np.asarray(exact(*args), dtype=float)
+        return np.where(distance > 20_000.0, np.nan, distance)
+
+    monkeypatch.setattr(h3util, "_haversine_km", nan_at_antipodes)
+
+    def centres(cells):
+        return np.array([h3.cell_to_latlng(cell) for cell in cells])
+
+    kept = centres(["84090cbffffffff", "84eaf37ffffffff"])
+    candidates = centres(["84eaf35ffffffff", h3.latlng_to_cell(0.0, 100.0, 4)])
+    assert list(_maximin_fill(candidates, kept, kept, 1)) == [1]
+
+
+def _balanced_geometry() -> tuple[np.ndarray, np.ndarray]:
+    """Observations on the 122 resolution-0 cell centres, whose mean direction is ~0 (5.7e-17)."""
+    import h3
+
+    centres = np.array([h3.cell_to_latlng(cell) for cell in sorted(h3.get_res0_cells())])
+    return centres[:, 0], centres[:, 1]
+
+
+@pytest.mark.parametrize("noise_seed", [0, 1, 2, 3])
+def test_one_ulp_of_noise_cannot_move_the_anchor_on_balanced_data(monkeypatch, noise_seed):
+    """With the observations in balance their mean direction is pure rounding noise.
+
+    Anchoring the first maximin pick on that direction let ±1 ulp in `to_unit_sphere` change
+    18-20 of the 60 cells chosen here (#399). The chosen cells must not move.
+    """
+    import genomeos.surfaces.fit as fit
+
+    lat, lon = _balanced_geometry()
+    expected = _as_cells(h3_inducing_points(lat, lon, 60, reach_km=500.0))
+
+    exact = fit.to_unit_sphere
+    rng = np.random.default_rng(noise_seed)
+
+    def noisy(*args):
+        xyz = np.asarray(exact(*args), dtype=float)
+        step = rng.choice([-np.inf, np.inf], size=xyz.shape)
+        return np.where(rng.random(xyz.shape) < 0.5, np.nextafter(xyz, step), xyz)
+
+    monkeypatch.setattr(fit, "to_unit_sphere", noisy)
+    assert _as_cells(h3_inducing_points(lat, lon, 60, reach_km=500.0)) == expected
+
+
+def test_settling_a_tie_warns_so_a_refit_can_be_versioned():
+    """A basis chosen by the tie rule differs from the old nearest-first one, so say when it runs."""
+    lat, lon, _ = _collocated_geometry()
+    with pytest.warns(UserWarning, match="tie"):
+        h3_inducing_points(lat, lon, 16, reach_km=1500.0)
+
+
+def test_no_tie_warning_when_every_tied_candidate_fits_the_budget(recwarn):
+    lat, lon, _ = _collocated_geometry()
+    h3_inducing_points(lat, lon, 70, reach_km=1500.0)
+    assert not [w for w in recwarn if "tie" in str(w.message)]
+
+
+def test_h3_inducing_points_refuses_an_empty_budget():
+    lat, lon, _ = _collocated_geometry()
+    with pytest.raises(ValueError, match="n_inducing"):
+        h3_inducing_points(lat, lon, 0, reach_km=1500.0)
 
 
 def test_more_budget_buys_finer_spacing():

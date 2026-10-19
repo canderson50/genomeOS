@@ -146,6 +146,17 @@ def _haversine_matrix(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
 
 
+def _great_circle_km(lat1, lon1, lat2, lon2) -> np.ndarray:
+    """Broadcasting great-circle distance in km, clipped like `_haversine_matrix` so antipodes
+    give 20,015 km rather than NaN."""
+    rlat1, rlat2 = np.radians(lat1), np.radians(lat2)
+    a = (
+        np.sin((rlat2 - rlat1) / 2) ** 2
+        + np.cos(rlat1) * np.cos(rlat2) * np.sin(np.radians(np.subtract(lon2, lon1)) / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
+
+
 def to_unit_sphere(lat: object, lon: object) -> np.ndarray:
     """(lat, lon) in degrees -> (x, y, z) on the unit sphere.
 
@@ -399,6 +410,11 @@ class SurfaceFit:
 #: straddling a 1 mm boundary; it cannot close it, and a tie that straddles one is still possible.
 DISTANCE_TIE_DECIMALS = 6
 
+#: Below this length the observations' mean direction on the sphere is rounding noise, not a
+#: direction, and `_maximin_fill` anchors on candidate 0 instead (#399). Real geographies sit near
+#: 0.1-1; data in exact balance gives ~1e-17.
+ANCHOR_MIN_PULL = 1e-9
+
 
 def h3_inducing_points(
     lat: np.ndarray,
@@ -431,6 +447,8 @@ def h3_inducing_points(
 
     from genomeos.geo.h3util import RESOLUTION_LADDER, _haversine_km, cells_within_km
 
+    if n_inducing < 1:
+        raise ValueError(f"n_inducing must be at least 1, got {n_inducing}")
     lat = np.asarray(lat, dtype=float)
     lon = np.asarray(lon, dtype=float)
     base, *finer = RESOLUTION_LADDER
@@ -458,9 +476,9 @@ def h3_inducing_points(
     if len(centres) == 0:
         raise ValueError("no H3 cells within reach of the observations")
 
-    # Rank by distance to the nearest observation and keep the closest. The stable sort orders
-    # equal distances by cell id; that only orders cells already kept, which matters because the
-    # order indexes the inducing field. It never decides which cells are kept.
+    # Rank by distance to the nearest observation and keep the closest. The order indexes the
+    # inducing field: cells nearer than the cut come first, by distance then cell id (the stable
+    # sort), and a tied tier settled below follows in maximin pick order.
     distance = np.round(
         _haversine_km(
             centres[:, 0][:, None], centres[:, 1][:, None], lat[None, :], lon[None, :]
@@ -472,6 +490,15 @@ def h3_inducing_points(
         cut = distance[order[n_inducing - 1]]
         nearer = order[distance[order] < cut]
         tied = order[distance[order] == cut]
+        if len(tied) > n_inducing - len(nearer):
+            warnings.warn(
+                f"{len(tied)} candidate cells tie at {cut:.6f} km from the observations for "
+                f"{n_inducing - len(nearer)} remaining inducing points; maximin spacing chose "
+                "among them (#280). Before that rule this basis was float noise, so a refit on "
+                "this geometry may differ from one made earlier: publish it under a new "
+                "model_version.",
+                stacklevel=2,
+            )
         picks = _maximin_fill(
             centres[tied], centres[nearer], np.column_stack([lat, lon]), n_inducing - len(nearer)
         )
@@ -489,15 +516,20 @@ def _maximin_fill(
     they tie — so the only geographic ground left for choosing is spread: a greedy maximin pick
     spends the remaining budget covering the most ground, the rule #267's review figure already
     uses. With nothing kept yet, the first pick is the candidate nearest the observations' mean
-    direction on the sphere, a data-derived anchor. Scores are rounded like the distances, and a
-    score still tied after that goes to the lowest candidate position — a total order among
-    places indistinguishable at 1 mm, never the selection rule. A zero mean direction (data in
-    exact balance) scores every candidate alike and lands on that order too, with no special case.
+    direction on the sphere, a data-derived anchor. Data in near-exact balance has no such
+    direction: its mean is rounding noise (5.7e-17 on the 122 res-0 centres), so below
+    `ANCHOR_MIN_PULL` the anchor is candidate 0 instead. Greedy farthest-point keeps its
+    2-approximation to k-centre coverage from any start. Scores are rounded like the distances,
+    and a score still tied after that goes to the lowest candidate position — a total order among
+    places indistinguishable at 1 mm, never the selection rule.
+
+    Distances here are candidate-to-candidate, so unlike the candidate-to-observation ranking they
+    reach antipodes, where an unclipped haversine can return NaN; NaN survives `np.minimum` and
+    wins `argmax`. `_great_circle_km` clips.
     """
-    from genomeos.geo.h3util import _haversine_km
 
     def km_to_nearest(points: np.ndarray) -> np.ndarray:
-        return _haversine_km(
+        return _great_circle_km(
             candidates[:, 0][:, None],
             candidates[:, 1][:, None],
             points[:, 0][None, :],
@@ -511,10 +543,13 @@ def _maximin_fill(
     else:
         xyz = to_unit_sphere(candidates[:, 0], candidates[:, 1])
         pull = to_unit_sphere(observations[:, 0], observations[:, 1]).mean(axis=0)
-        off_centre_km = EARTH_RADIUS_KM * np.arctan2(
-            np.linalg.norm(np.cross(xyz, pull), axis=1), xyz @ pull
-        )
-        picks.append(int(np.argmin(np.round(off_centre_km, DISTANCE_TIE_DECIMALS))))
+        if np.linalg.norm(pull) < ANCHOR_MIN_PULL:
+            picks.append(0)
+        else:
+            off_centre_km = EARTH_RADIUS_KM * np.arctan2(
+                np.linalg.norm(np.cross(xyz, pull), axis=1), xyz @ pull
+            )
+            picks.append(int(np.argmin(np.round(off_centre_km, DISTANCE_TIE_DECIMALS))))
         available[picks[0]] = False
         nearest = km_to_nearest(candidates[picks])
     while len(picks) < n:
