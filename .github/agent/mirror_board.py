@@ -9,7 +9,7 @@ the fork's `agent-state` branch:
   issues/index.tsv   every issue: number, state, state reason, board status, labels, title
   issues/<N>.md      title, metadata, body and comments of every issue
   prs/index.tsv      every PR: number, state, draft, head, base, title
-  prs/<N>.md         title, metadata and body of every PR
+  prs/<N>.md         title, metadata, body, comments, reviews and review threads of every PR
 
 Fails loudly on any API error rather than writing a partial mirror.
 """
@@ -59,13 +59,31 @@ PRS_QUERY = """
 query($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef { name target { oid } }
-    pullRequests(first: 50, after: $cursor, orderBy: {field: CREATED_AT, direction: ASC}) {
+    pullRequests(first: 25, after: $cursor, orderBy: {field: CREATED_AT, direction: ASC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title state isDraft merged url createdAt closedAt mergedAt body
+        number title state isDraft merged url createdAt updatedAt closedAt mergedAt body
         author { login }
         baseRefName headRefName headRepositoryOwner { login }
         labels(first: 30) { nodes { name } }
+        comments(first: 100) {
+          totalCount
+          nodes { author { login } createdAt url body }
+        }
+        reviews(first: 50) {
+          totalCount
+          nodes { author { login } state submittedAt url body }
+        }
+        reviewThreads(first: 50) {
+          totalCount
+          nodes {
+            isResolved isOutdated path line originalLine
+            comments(first: 30) {
+              totalCount
+              nodes { author { login } createdAt url body }
+            }
+          }
+        }
       }
     }
   }
@@ -120,8 +138,20 @@ def one_line(text: str) -> str:
     return " ".join(text.split()).replace("\t", " ")
 
 
+def comment_lines(heading: str, comments: dict) -> list[str]:
+    """A `## heading (shown of total)` section with one `###` entry per comment."""
+    lines = ["", f"## {heading} ({len(comments['nodes'])} of {comments['totalCount']})"]
+    for comment in comments["nodes"]:
+        lines += [
+            "",
+            f"### {login(comment['author'])}, {comment['createdAt']} ({comment['url']})",
+            "",
+            comment["body"],
+        ]
+    return lines
+
+
 def write_issue(directory: pathlib.Path, issue: dict, status: str) -> None:
-    comments = issue["comments"]
     lines = [
         f"# #{issue['number']}: {issue['title']}",
         "",
@@ -143,16 +173,8 @@ def write_issue(directory: pathlib.Path, issue: dict, status: str) -> None:
                 for pr in linked
             )
         )
-    lines += ["", "## Body", "", issue["body"] or "_(empty)_", ""]
-    shown = len(comments["nodes"])
-    lines.append(f"## Comments ({shown} of {comments['totalCount']})")
-    for comment in comments["nodes"]:
-        lines += [
-            "",
-            f"### {login(comment['author'])}, {comment['createdAt']} ({comment['url']})",
-            "",
-            comment["body"],
-        ]
+    lines += ["", "## Body", "", issue["body"] or "_(empty)_"]
+    lines += comment_lines("Comments", issue["comments"])
     (directory / f"{issue['number']}.md").write_text("\n".join(lines) + "\n")
 
 
@@ -165,13 +187,33 @@ def write_pr(directory: pathlib.Path, pr: dict) -> None:
         f"- state: {state}{' (draft)' if pr['isDraft'] else ''}",
         f"- head: {login(pr['headRepositoryOwner'])}:{pr['headRefName']} -> base {pr['baseRefName']}",
         f"- labels: {', '.join(names(pr['labels'])) or 'none'}",
-        f"- author: {login(pr['author'])}; created {pr['createdAt']}; "
+        f"- author: {login(pr['author'])}; created {pr['createdAt']}; updated {pr['updatedAt']}; "
         f"closed {pr['closedAt'] or 'no'}; merged {pr['mergedAt'] or 'no'}",
         "",
         "## Body",
         "",
         pr["body"] or "_(empty)_",
     ]
+    lines += comment_lines("Comments", pr["comments"])
+    reviews = pr["reviews"]
+    lines += ["", f"## Reviews ({len(reviews['nodes'])} of {reviews['totalCount']})"]
+    for review in reviews["nodes"]:
+        lines += [
+            "",
+            f"### {login(review['author'])}, {review['state']}, {review['submittedAt']} ({review['url']})",
+            "",
+            review["body"] or "_(no summary; see review threads)_",
+        ]
+    threads = pr["reviewThreads"]
+    lines += ["", f"## Review threads ({len(threads['nodes'])} of {threads['totalCount']})"]
+    for thread in threads["nodes"]:
+        where = f"{thread['path']}:{thread['line'] or thread['originalLine']}"
+        flags = ", ".join(
+            flag
+            for flag, on in (("resolved", thread["isResolved"]), ("outdated", thread["isOutdated"]))
+            if on
+        )
+        lines += comment_lines(f"Thread on {where}{f' [{flags}]' if flags else ''}", thread["comments"])
     (directory / f"{pr['number']}.md").write_text("\n".join(lines) + "\n")
 
 
