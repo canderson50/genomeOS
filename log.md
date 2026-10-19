@@ -18,3 +18,5 @@
 2026-10-16 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-16T09:55Z, 0 Ready of 256 issues). No claude/issue-* drafts open.
 2026-10-19 synced: merged upstream e1706b4 (incl. #435 merged, #474 data store, #489 HbS parity input release) into fork main; fork main a9b1245.
 2026-10-19 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-19T10:54Z, 0 Ready of 268 issues). No claude/issue-* drafts open.
+2026-10-19 updated mirror_board.py to copy PR comments, reviews and review threads (at canderson50's request; fork main c808f85); mirror rerun 6777487.
+2026-10-19 updated: upstream #402 (issue #258) per bschilder's review, at canderson50's request: PYTHONPATH fix on 3 sibling call sites (53cc572); full pytest 6484 passed, 37 skipped.
