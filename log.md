@@ -16,3 +16,5 @@
 2026-10-15 ran #442 lean stage 0 (at canderson50's request, branch claude/issue-442-sbc-stage0 @26544c6): prior predictive (local CPU, 1000 draws, 672 MAP sites) + pilot on A40 pod 239rrcl0l7nx7k: 9/9 fits converged, 414-997 s each, divergences in 4/9; $0.88.
 2026-10-16 synced: merged upstream 1d55838 (#462 site redesign) into fork main; fork main 85adb21.
 2026-10-16 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-16T09:55Z, 0 Ready of 256 issues). No claude/issue-* drafts open.
+2026-10-19 synced: merged upstream e1706b4 (incl. #435 merged, #474 data store, #489 HbS parity input release) into fork main; fork main a9b1245.
+2026-10-19 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-19T10:54Z, 0 Ready of 268 issues). No claude/issue-* drafts open.
