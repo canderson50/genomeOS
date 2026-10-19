@@ -21,3 +21,4 @@
 2026-10-19 updated mirror_board.py to copy PR comments, reviews and review threads (at canderson50's request; fork main c808f85); mirror rerun 6777487.
 2026-10-19 updated: upstream #402 (issue #258) per bschilder's review, at canderson50's request: PYTHONPATH fix on 3 sibling call sites (53cc572); full pytest 6484 passed, 37 skipped.
 2026-10-19 updated: upstream #424 (no issue) at canderson50's request: merged upstream e1706b4 (hf-dataset-card conflict, took #474 text) and fixed CONTRIBUTING pages/#470 line + overview data-store/web-bucket lines (acb57e0); docs tests 476 passed, rebuild 11 rows x2, merge-tree clean.
+2026-10-19 updated: upstream #399 (issue #280) per bschilder's review, at canderson50's request: merged upstream e1706b4; antipodal NaN + balanced-anchor fixes, n_inducing guard, tie warning (1f2368d); HbS tie check on release 2026-10-18 parity input: main/PR/update byte-identical, no tie; full pytest 7212 passed, 52 skipped.
