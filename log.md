@@ -28,3 +28,4 @@
 2026-10-19 drafted: issue #111 (advances, does not close), canderson50/genomeOS#6, at canderson50's request: build_surfaces.py default draws 400 -> 1200 (0cf7592); full pytest 7199 passed, 52 skipped. Found: artifact manifests omit the sampling budget (not fixed).
 2026-10-19 closed: canderson50/genomeOS#6 (issue #111), submitted upstream as #493.
 2026-10-19 drafted: issue #39 (advances), canderson50/genomeOS#7, at canderson50's request: mask.contraction_report (d346819); full pytest 7204 passed, 52 skipped.
+2026-10-19 drafted: issue #198 (closes), canderson50/genomeOS#8, at canderson50's request: tests/test_surface_fit_replay.py (6648d00); full pytest 7200 passed, 52 skipped; replay tests fail on 33aa2e1 (pre-#203) as #198 recorded.
