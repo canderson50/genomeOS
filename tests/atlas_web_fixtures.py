@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 
+from genomeos.publication.web_format import WEB_FORMAT_VERSION
 from genomeos.publication.web_layout import apply_download_layout, artifact_objects
 
 GRID = b"GOSA grid stand-in: two res-3 cells\n"
@@ -77,6 +78,7 @@ def flat_catalog() -> dict[str, Any]:
             }
         ],
         "context_sources": [{"id": "natural-earth-admin-0", "url": "ne-50m-admin-0.geojson"}],
+        "format_version": WEB_FORMAT_VERSION,
         "grids": {
             GRID_SHA256: {
                 "bytes": len(GRID),
@@ -131,7 +133,16 @@ def write_dist(root: Path, artifact_base: str, catalog: dict[str, Any] | None = 
 
 
 FAKE_GCLOUD = Path(__file__).with_name("fake_gcloud.py")
-MUTATING_VERBS = {"create", "update", "add-iam-policy-binding", "cp"}
+MUTATING_VERBS = {
+    "create",
+    "update",
+    "add-iam-policy-binding",
+    "remove-iam-policy-binding",
+    "cp",
+    "enable",
+    "deploy",
+    "undelete",
+}
 
 
 @dataclass(frozen=True)
@@ -157,6 +168,9 @@ class FakeGcloud:
 
     def configs(self) -> set[str | None]:
         return {record["cloudsdk_config"] for record in self._records()}
+
+    def impersonations(self) -> set[str | None]:
+        return {record.get("impersonate") for record in self._records()}
 
     def mutating_calls(self) -> list[list[str]]:
         return [call for call in self.calls() if MUTATING_VERBS & set(call[:4])]
