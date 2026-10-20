@@ -29,3 +29,6 @@
 2026-10-19 closed: canderson50/genomeOS#6 (issue #111), submitted upstream as #493.
 2026-10-19 drafted: issue #39 (advances), canderson50/genomeOS#7, at canderson50's request: mask.contraction_report (d346819); full pytest 7204 passed, 52 skipped.
 2026-10-19 drafted: issue #198 (closes), canderson50/genomeOS#8, at canderson50's request: tests/test_surface_fit_replay.py (6648d00); full pytest 7200 passed, 52 skipped; replay tests fail on 33aa2e1 (pre-#203) as #198 recorded.
+2026-10-20 closed: canderson50/genomeOS#7 (issue #39), submitted upstream as #494.
+2026-10-20 closed: canderson50/genomeOS#8 (issue #198), submitted upstream as #495.
+2026-10-20 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-20T10:09Z, 0 Ready of 268 issues). No claude/issue-* drafts open.
