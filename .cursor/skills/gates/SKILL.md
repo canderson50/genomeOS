@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Run the Python job's local steps from `.github/workflows/ci.yml`. Follow that job, not the shorter list in `CONTRIBUTING.md` (it omits `check_commercial_use.py`).
 
-Work from the repository root. Run each command and keep its output. A tick or the word `passed` is not evidence.
+Work from the repository root. Run each command and keep the full output locally. The local run may be verbose. The text pasted into the pull request may not. A tick or the word `passed` alone is not evidence.
 
 ## Python
 
@@ -49,25 +49,29 @@ Leave Playwright e2e on CI unless the task is an interaction bug.
 
 ## What to paste into the PR template
 
-Paste into the **Gates** section of `.github/PULL_REQUEST_TEMPLATE.md`, inside the Output block. The checklist there has no line for `check_commercial_use.py` and lists a bare `pytest`. Use this text, with the real count or the failure text on each line:
+Paste one summary line per command. That is the tool's own one-line result, or a pytest count such as `7145 passed, 52 skipped`. The same line may be repeated inside the Output details block of `.github/PULL_REQUEST_TEMPLATE.md`. Do not paste `pytest -v` logs, tracebacks, or any other extra output.
+
+On failure, paste that summary line plus the failing test names. Do not paste tracebacks or the verbose log.
+
+The checklist has no line for `check_commercial_use.py` and lists a bare `pytest`. Use this text:
 
 ```
-ruff check .: <count or failure>
-python scripts/freeze_contract.py --check: <count or failure>
-python scripts/check_module_size.py: <count or failure>
-python scripts/check_private_files.py: <count or failure>
-python scripts/check_commercial_use.py: <count or failure>
-python scripts/smoke.py: <count or failure>
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 pytest -n auto --dist loadfile -v --durations=40: <count or failure>
+ruff check .: <one-line result>
+python scripts/freeze_contract.py --check: <one-line result>
+python scripts/check_module_size.py: <one-line result>
+python scripts/check_private_files.py: <one-line result>
+python scripts/check_commercial_use.py: <one-line result>
+python scripts/smoke.py: <one-line result>
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 pytest -n auto --dist loadfile -v --durations=40: <count, such as 7145 passed, 52 skipped>
 ```
 
-When `website/` changed, add:
+When `website/` changed, add one summary line each:
 
 ```
-npm ci: <count or failure>
-npm run format:check: <count or failure>
-npm run check: <count or failure>
-npm test: <count or failure>
+npm ci: <one-line result>
+npm run format:check: <one-line result>
+npm run check: <one-line result>
+npm test: <one-line result>
 ```
 
 When a schema changed, add one line that `python scripts/freeze_contract.py` ran and that the `contract/` diff is in the PR.
