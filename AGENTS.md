@@ -428,3 +428,22 @@ For the Atlas, correctness means **reproducing published science**, not producin
 output. Golden tests 1–3 (HbS parity, G6PD parity, carrier-screening parity) gate publication of
 every other variant's burden layer (§8). Never weaken a golden test to make a build pass; if it
 fails, the pipeline is wrong.
+
+## Cursor Cloud specific instructions
+
+A Cloud Agent for this repo already has the locked toolchain and starts the local servers on boot.
+Use those instead of installing again or binding the same ports.
+
+- Python 3.12 dependencies are the lockfile set (`dev`, `atlas`, `surfaces`, `geo`, `figures`) in
+  `/workspace/.venv`. Login shells put that `bin` directory on `PATH`, so `python`, `pytest`,
+  `ruff`, and `genomeos` are the project ones. Confirm with
+  `python -c "import genomeos; print(genomeos.__file__)"` before trusting a run.
+- The website requires Node 24 (`website/package.json` `engines`). It is installed at
+  `/opt/node-v24` and prepended on `PATH` for login shells. The image `node` is 22 and will not
+  satisfy that engine field.
+- On boot the API listens at `http://127.0.0.1:8000` (diagnostic preview at `/preview`, sqlite
+  `genomeos.db`, `demo/artifacts`). The website dev server listens at `http://127.0.0.1:4321`.
+  A second `uvicorn` or `astro dev` on those ports fails with the address already in use.
+- Re-run the gates in **Commands** after code changes. `python scripts/smoke.py` is the fast
+  Python check. Website unit tests are `npm test` in `website/`; `npm run check` is the Astro
+  and TypeScript check. The full `pytest` suite is the CI job and is much slower than smoke.
