@@ -34,3 +34,4 @@
 2026-10-20 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-20T10:09Z, 0 Ready of 268 issues). No claude/issue-* drafts open.
 2026-10-21 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-21T10:17Z, 0 Ready of 269 issues). No claude/issue-* drafts open.
 2026-10-22 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-22T10:18Z, 0 Ready of 269 issues). No claude/issue-* drafts open.
+2026-10-23 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-10-23T10:11Z, 0 Ready of 269 issues). No claude/issue-* drafts open.
