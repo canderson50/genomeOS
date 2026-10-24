@@ -1,0 +1,222 @@
+number	state	draft	head	base	title
+5	MERGED		genomeOS:docs/atlas-v1-spec	main	Genome OS Atlas v1 design spec (P0–P5)
+6	MERGED		genomeOS:docs/atlas-plan-1	main	Implementation plan 1: data foundation (P0 + P1)
+70	MERGED		genomeOS:ci/project-status	main	Project board automation and conventions
+71	MERGED		genomeOS:docs/fix-pat-guidance	main	Fix PROJECT_TOKEN guidance: classic PAT, not fine-grained
+73	MERGED		genomeOS:ci/auto-add-to-project	main	Auto-add new issues to the board
+75	MERGED		genomeOS:integrate/local-application	main	Integrate local GenomeOS application
+77	MERGED		genomeOS:docs/project-overview	main	docs: project overview and contributor-facing README
+78	MERGED		genomeOS:docs/agents-md	docs/project-overview	docs: AGENTS.md conventions for agentic contributors
+79	MERGED		genomeOS:docs/restore-agents-md	main	docs: restore AGENTS.md onto main, and reword the README opening
+80	MERGED		genomeOS:docs/readme-banner	main	docs: add genomeOS banner to the README
+81	MERGED		genomeOS:feat/atlas-data-foundation	main	feat: Atlas data foundation — P0 registry + P1 observations (Plan 1)
+82	MERGED		genomeOS:docs/pr-closing-convention	main	docs: PR and commit closing-keyword guidance
+84	MERGED		genomeOS:feat/p2-surface-fit	main	feat(P2): binomial spatial-GP surface fit on PyMC + HSGP
+86	MERGED		genomeOS:feat/p2-data-support-mask	main	feat(P2): data-support mask and masked aggregation
+88	MERGED		genomeOS:feat/p3-burden-engine	main	feat(P3): burden expressions, posterior-draw propagation, and refusals
+91	MERGED		genomeOS:feat/p3-map-hbs-real-data	main	feat(P1): ingest the real MAP HbS survey database
+93	MERGED		genomeOS:feat/piel2013-parity-target	main	feat(P3): extract the Piel 2013 national estimates as the parity target
+95	MERGED		genomeOS:feat/hbs-parity-scorer	main	feat(P3): HbS parity scorer encoding §8's acceptance criteria
+97	MERGED		genomeOS:feat/p3-worldpop-denominators	main	feat(P3): WorldPop population denominators aggregated to H3
+98	MERGED		genomeOS:feat/observation-figures	main	feat: render the observations layer as a review figure
+100	MERGED		genomeOS:chore/rigorous-agent-guardrails	main	Add rigorous scientific and development guardrails
+105	MERGED		genomeOS:feat/inducing-point-gp	main	feat(P2): inducing-point GP on the H3 geodesic sphere
+107	MERGED		genomeOS:feat/minimal-artifact-read-preview	main	Add minimal Atlas artifact read preview
+108	MERGED		genomeOS:feat/holdout-validation	main	fix(P2): render the surface on H3 cells, and make the fit affordable
+114	MERGED		genomeOS:fix/predictive-coverage	main	fix(P2): score calibration against the predictive, not the latent frequency
+115	MERGED		genomeOS:feat/94-national-burden-rollup	main	feat(P3): aggregate the fitted surface to national estimates for parity scoring
+118	MERGED		genomeOS:feat/afnd-registry-adapter	main	feat(P0): AFND registry adapter with derived radii and recorded ascertainment
+119	MERGED		genomeOS:feat/g6pd-observations	main	feat: G6PD as a second variant, batch orchestration, and recover 249 discarded surveys
+120	MERGED		canderson50:claude/genomeos-project-review-lugixz	main	fix(P2): make target_accept settable and raise the fold sampling budget
+124	MERGED		genomeOS:feat/afnd-live-harvest	main	feat: AFND live harvest, allele-frequency adapter, immutable artifacts, and a cohort-identifiability fix
+125	MERGED		genomeOS:chore/pin-environment	main	chore: pin the environment so behaviour disagreements are reproducible
+126	MERGED		genomeOS:chore/fix-fastapi-bound-and-refresh-lock	main	chore: restore the fastapi bound and fix the lock-regeneration guidance
+131	MERGED		canderson50:claude/genomeos-project-review-lugixz	main	feat(P2): grouped cross-validation folds and study-split reporting
+132	MERGED		genomeOS:feat/109-holdout-validation-results	main	feat(P2): held-out predictive validation of the HbS surface
+135	MERGED		genomeOS:fix/134-afnd-variant-families	main	fix(P1): give each AFND gene family its own namespace, and refuse the two that are not allele frequencies
+136	MERGED		genomeOS:feat/afnd-surface-plots	main	feat(P4): scale presence markers by observed frequency, and render AFND alleles
+138	MERGED		genomeOS:docs/127-fold-strategy-figure	main	docs: figure showing what each fold strategy does to the studies it splits
+139	MERGED		genomeOS:chore/sync-sweep-fits-to-hf	main	chore: sync the screening fits and rendered surfaces to the HF store
+140	MERGED		genomeOS:feat/publish-afnd-artifacts	main	feat(P2): publish AFND surfaces as artifacts, and stop the scraper cache polluting the inventory
+142	MERGED		genomeOS:fix/141-refuse-registry-strata	main	fix(P1): refuse donor-registry ancestry strata
+143	MERGED		genomeOS:feat/133-carrier-and-cytokine	main	feat(P1): carrier-frequency table for KIR, genotype counting for cytokines
+145	MERGED		genomeOS:feat/v2-artifacts	main	feat(P2): publish v2 artifacts on the cleaned corpus, and restore as_binomial
+146	MERGED		genomeOS:feat/130-skill-gate	main	feat(P2): refuse surfaces that cannot beat a constant baseline
+147	MERGED		genomeOS:fix/49-cloud-run-diagnostic	main	feat(infra): deploy the Atlas diagnostic read path
+148	MERGED		genomeOS:feat/55-atlas-map-ui	fix/49-cloud-run-diagnostic	feat: add interactive Atlas map explorer
+152	MERGED		genomeOS:feat/149-literature-evidence	main	feat: add auditable literature evidence foundation
+155	MERGED		genomeOS:feat/153-docs-site	main	feat: publish the genomeOS documentation site
+156	MERGED		manpreetbola:literature/lct-enattah-2007-corpus	main	feat(literature): stage LCT rs4988235 corpus slice from Enattah 2007 genotype counts (12 records)
+158	MERGED		genomeOS:fix/157-sticky-wordmark	main	fix: keep site navigation visible
+160	MERGED		canderson50:claude/genomeos-project-review-lugixz	main	fix(P1): put the measurement in the AFND frequency record identity
+161	MERGED		genomeOS:feat/55-care-unblock	main	feat: expand and enrich the Cesium Atlas
+168	MERGED		genomeOS:feat/165-cell-outlines-default	main	feat: clarify Atlas cells and map destinations
+169	MERGED		genomeOS:docs/164-public-ghcr	main	docs: publish reproducible GHCR instructions
+173	MERGED		genomeOS:feat/171-gnomad-evidence	main	feat: add layered gnomAD evidence views
+174	MERGED		genomeOS:feat/172-atlas-progress	main	feat: add honest Atlas operation progress
+175	MERGED		genomeOS:fix/170-observation-studs	main	fix: mount observation studs above inferred surfaces
+179	MERGED		genomeOS:fix/176-stable-studs	main	fix: stabilize Atlas markers and refine surface controls
+188	MERGED		manpreetbola:literature/hbb-rs334-salih-2010	main	feat(literature): stage HBB rs334 corpus slice from Salih 2010 genotype counts (2 records)
+197	MERGED		genomeOS:feat/global-af-modeling	main	feat: establish leakage-aware AF benchmarks and verified GPU scoring
+203	MERGED		genomeOS:feat/global-af-observation-prediction	main	feat: expose observation-aware GP predictive parameters
+204	MERGED		genomeOS:docs/global-af-gbd-evidence	main	docs: incorporate supplied GBD paper into AF research safeguards
+206	MERGED		genomeOS:docs/global-af-cugen-gpu-evidence	main	docs: preserve CuGen GPU precision failure evidence
+207	MERGED		manpreetbola:feat/alphagenome-avi-panel	main	feat(atlas): add AlphaGenome AVI predicted-impact tab to the variant info panel
+208	MERGED		genomeOS:feat/global-af-empirical-benchmarks	main	docs: qualify HGDP cohorts, allele counts and benchmark dependencies
+210	MERGED		genomeOS:feat/global-af-reference-counts	main	Add audited reference-count baselines and repair count calibration
+212	MERGED		genomeOS:feat/global-af-cugen-pilot	main	feat: qualify bounded synthetic CuGen training LD
+213	MERGED		genomeOS:feat/global-af-population-heterogeneity	main	feat: add independently verified population-heterogeneity core
+215	MERGED		genomeOS:feat/global-af-heterogeneity-oracles	main	Fix heterogeneity likelihood with independent sampler oracles
+216	MERGED		genomeOS:feat/global-af-sbc-primitives	main	feat: add independent B0H calibration primitives
+218	MERGED		genomeOS:feat/global-af-sbc-generation	main	feat: add independent B0H simulation cases
+220	MERGED		genomeOS:feat/global-af-sbc-attempts	main	feat: bind B0H fit attempts to declared cases
+223	MERGED		genomeOS:feat/global-af-sbc-quantities	main	feat: add guarded B0H simulation-calibration quantities
+224	MERGED		genomeOS:feat/global-af-b0h-summaries	main	feat: preserve B0H posterior and heldout summary evidence
+226	MERGED		genomeOS:research/global-af-b0h-timing	main	research: measure the actual B0H GPU workflow
+227	MERGED		genomeOS:fix/225-carriers-canonical-sample-size	main	fix(P1): make the AFND carrier sample size one canonical integer
+229	MERGED		genomeOS:fix/identity-native-scalar-form	main	fix(P1): keep NumPy scalars out of the AFND record identity
+233	MERGED		genomeOS:feat/global-af-b0h-codec	main	feat: preserve B0H evidence with a strict lossless codec
+236	MERGED		genomeOS:research/global-af-dhs-hbs-qualification	main	docs: qualify DHS Nigeria HbS benchmark candidate
+239	MERGED		genomeOS:docs/238-contributor-entry-point	main	docs: add a contributor entry point and make the discovery step binding
+240	MERGED		genomeOS:research/global-af-terrain-qualification	main	docs: qualify environmental sources and retain climate consistency evidence
+243	MERGED		genomeOS:fix/231-234-record-true-precision	main	fix: record the precision we actually have
+244	MERGED		genomeOS:fix/235-gate-personal-paths	main	fix: make the privacy gate catch personal paths in tracked files
+245	MERGED		genomeOS:feat/global-af-b0h-comparison	main	feat: integrate auditable B0H reference-count comparisons
+247	MERGED		genomeOS:docs/variant-normalization-registry-spec	main	docs: design for a reviewed variant-normalization registry
+249	MERGED		manpreetbola:literature/lct-enattah-2007-builder	main	feat(literature): add a replayable builder and committed payloads for the lct-enattah-2007 slice
+250	MERGED		genomeOS:docs/variant-normalization-registry-plan	main	docs: implementation plan for the variant-normalization registry
+252	MERGED		genomeOS:feat/global-af-b0h-runner	main	feat: add auditable single-GPU B0H calibration runner
+259	MERGED		genomeOS:feat/variant-normalization-registry	main	feat(registry): reviewed variant-normalization registry
+260	CLOSED		genomeOS:feat/global-af-reference-windows	feat/global-af-b0h-comparison	feat: preflight frozen autosomal reference windows
+263	MERGED		genomeOS:fix/hgdp-explicit-support	main	fix: require explicit HGDP spatial support and provenance
+265	MERGED		genomeOS:fix/registry-immutable-publication	main	fix: publish and verify immutable population registries
+267	MERGED		genomeOS:fix/266-pointwise-prior-contraction	main	fix: use local prior uncertainty for surface support
+268	CLOSED		genomeOS:feat/global-af-b0h-paired-report	feat/global-af-b0h-comparison	feat: report paired B0 and population-heterogeneity comparisons
+269	MERGED		genomeOS:feat/global-af-calibration-report	main	feat: add lossless B0H calibration reports
+270	MERGED		genomeOS:data/verify-variant-normalization	main	data: independently verify 3 of 4 variant-normalization rows, refuse the fourth
+274	CLOSED	draft	genomeOS:fix/count-predictive-high-concentration	feat/global-af-calibration-report	fix: add count recurrence candidate and disclose failed numerical acceptance
+279	MERGED		genomeOS:feat/32-curated-variant-set	main	feat: freeze curated variant candidates
+283	MERGED		genomeOS:feat/global-af-reference-windows	main	feat: preflight frozen autosomal reference windows
+284	MERGED		genomeOS:feat/global-af-b0h-paired-report	main	feat: report paired B0 and population-heterogeneity comparisons
+286	CLOSED	draft	genomeOS:feat/trait-evidence-contracts	main	Add traceable trait evidence and synchronized real-map comparison
+287	CLOSED	draft	genomeOS:feat/global-af-reference-acquisition	main	feat: prepare frozen reference-window development counts
+288	MERGED		genomeOS:fix/prior-normalization-geography	main	Tie the prior-normalization diagnostic to survey geography
+291	MERGED		genomeOS:docs/discovery-is-not-a-precondition	main	docs: a paper does not need a search to enter a corpus
+292	MERGED		genomeOS:fix/285-numpy-numba-compat	main	fix: constrain NumPy for scientific fits
+295	MERGED		genomeOS:feat/commercial-use-marking	main	feat: mark non-commercial data so it can be extracted wholesale
+297	MERGED		genomeOS:docs/290-source-neutral-covariates	main	docs: make covariate triage source-neutral
+301	MERGED		genomeOS:fix/300-piel-2010-denominators	main	fix: align HbS parity denominators to Piel 2010
+302	MERGED		genomeOS:fix/294-gnomad-dbsnp-commercial-checks	main	docs: record dated commercial-use checks for gnomAD and dbSNP
+303	MERGED		genomeOS:fix/298-figure-panel-assertions	main	test: assert what each review-figure panel actually draws
+304	MERGED		genomeOS:fix/exporter-over-module-budget	main	fix: bring the Atlas exporter back under the module budget
+305	MERGED		genomeOS:feat/103-piel-flexible-link-preflight	main	feat: reject Piel cubic and Stukel link candidates
+306	MERGED		genomeOS:feat/103-zero-inflated-preflight	main	feat: preflight zero-inflated HbS counts
+308	MERGED		genomeOS:docs/189-finalize-initial-slice	main	docs: record initial AF slice handoff
+309	MERGED		genomeOS:research/189-hbs-external-development	main	docs: qualify external HbS development cohorts
+310	OPEN		manpreetbola:ci/manifest-payload-counts	main	feat(ci): reconcile every committed search manifest against the payload it declares
+311	MERGED		genomeOS:feat/103-amplitude-prior-preflight	main	feat: reject tighter HbS amplitude-prior candidates
+313	MERGED		genomeOS:feat/189-hbs-current-gp-benchmark	main	feat: benchmark current HbS spatial and local models
+315	MERGED		genomeOS:fix/314-high-an-beta-score	feat/189-hbs-current-gp-benchmark	fix: score high-denominator beta-binomial counts
+317	MERGED		genomeOS:fix/316-quantile-bracket	fix/314-high-an-beta-score	fix: bracket high-count predictive quantiles
+320	MERGED		genomeOS:perf/318-cupy-batching	fix/316-quantile-bracket	perf: batch exact CuPy beta-binomial tails
+321	MERGED		genomeOS:feat/319-fold-checkpoints	perf/318-cupy-batching	feat: checkpoint spatial benchmarks at fold boundaries
+322	MERGED		genomeOS:feat/307-local-count-smoother	feat/319-fold-checkpoints	feat: benchmark local allele counts with explicit support
+323	MERGED		canderson50:claude/genomeos-project-review-lugixz	main	fix(P1): refuse fractional counts instead of truncating them
+330	MERGED		genomeOS:research/326-chinese-cohort-overlap	main	docs: audit participant overlap across Chinese genomic resources
+332	MERGED		genomeOS:feat/189-hbs-current-gp-report	feat/307-local-count-smoother	feat: report matched current GP benchmark
+334	MERGED		genomeOS:fix/333-spatial-gp-diagnostics	feat/307-local-count-smoother	fix: reject non-converged spatial GP folds
+335	MERGED		genomeOS:feat/325-wbbc-regional-counts	main	feat: ingest WBBC regional allele counts
+336	MERGED		genomeOS:fix/190-map-explicit-support-recovery	main	fix: require explicit MAP spatial support
+339	MERGED		genomeOS:fix/338-curated-fractional-counts	main	fix(P0): refuse fractional counts in the curated registry, and guard every schema
+342	MERGED		genomeOS:fix/341-b0h-predictive-domain	main	fix: preserve B0H draws beyond the legacy predictive concentration bound
+343	MERGED		genomeOS:fix/340-null-word-literals	main	fix: flag placeholder text for human review
+344	MERGED		genomeOS:feat/37-observation-footprints	main	feat: add explicit observation-footprint likelihood
+345	MERGED		genomeOS:feat/290-covariate-asset-registry	main	feat: add a versioned Earth Engine covariate registry
+346	MERGED		genomeOS:feat/255-reference-preflight-split	main	feat: prepare verified reference-window counts
+347	MERGED		genomeOS:feat/255-reference-cohort-split	feat/255-reference-preflight-split	feat: preserve exact reference cohort identities
+348	MERGED		genomeOS:feat/255-reference-genotype-split	feat/255-reference-cohort-split	feat: preserve reference genotype count semantics
+349	MERGED		genomeOS:feat/255-reference-byte-acquisition-split	feat/255-reference-genotype-split	feat: acquire verified reference byte ranges
+350	MERGED		genomeOS:feat/255-reference-preparation-artifacts-split	feat/255-reference-byte-acquisition-split	feat: bind reference preparation artifacts
+351	MERGED		genomeOS:feat/255-reference-count-cli-split	feat/255-reference-preparation-artifacts-split	feat: compose verified reference count preparation
+353	MERGED		genomeOS:perf/337-b0h-concurrency	main	feat: run B0H campaigns with bounded concurrency
+354	MERGED		genomeOS:feat/337-b0h-concurrent-runner	perf/337-b0h-concurrency	feat: run B0H calibration with isolated workers
+356	MERGED		genomeOS:docs/355-apache-license	main	docs: license genomeOS under Apache 2.0 and add status badges
+358	MERGED		genomeOS:ci/357-coverage-sysmon	main	ci: speed up coverage and serve its badge reliably
+360	MERGED		genomeOS:fix/359-coverage-pages-url	main	fix: serve coverage badge from project site
+361	MERGED		genomeOS:fix/359-relative-coverage	main	fix: render coverage badge without Pages
+362	MERGED		genomeOS:docs/b0h-reference-results	main	docs: publish the completed population-aware count comparison
+363	MERGED		genomeOS:fix/359-first-party-coverage-v2	main	fix: serve coverage badge from genomeOS
+364	MERGED		genomeOS:feat/331-b1g-basis-preflight	main	feat: add B1G compact-support preflight
+365	MERGED		genomeOS:fix/359-coverage-90	main	fix: refresh coverage badge to 90%
+366	MERGED		genomeOS:feat/331-b1g-fit	main	feat: fit and evaluate compact positive HbS bases
+367	MERGED		genomeOS:fix/359-relative-coverage	main	fix: render coverage badge without Pages
+368	MERGED		genomeOS:feat/331-b1g-artifacts	main	feat: add sharded B1G benchmark artifacts
+369	MERGED		genomeOS:fix/359-coverage-click-target	main	fix: link coverage badge to its artifact
+370	MERGED		genomeOS:feat/331-b1g-comparison	main	feat: validate matched B1G comparisons
+372	MERGED		genomeOS:fix/coverage-badge-click	main	fix: repair coverage badge destination
+373	MERGED		genomeOS:perf/b1g-log-score-selection	main	fix: skip unused B1G inner interval diagnostics
+375	MERGED		genomeOS:fix/374-three-inner-folds	main	fix: enforce three inner folds in nested selection
+377	MERGED		genomeOS:fix/376-b1g-convergence-retry	main	fix: retain the prespecified B1G convergence retry
+379	MERGED		genomeOS:fix/378-coverage-artifact-link	main	fix: repair the coverage badge artifact link
+383	MERGED		genomeOS:docs/331-b1g-results	main	docs: record the B1G benchmark rejection
+385	MERGED		genomeOS:feat/384-spatial-activity-preflight	main	feat: add the spatial-activity prediction foundation
+386	MERGED		genomeOS:feat/384-activity-likelihood	main	feat: add executable spatial activity preflight folds
+387	MERGED		genomeOS:feat/384-activity-campaign	main	feat: execute registered spatial-activity campaign
+389	MERGED		genomeOS:fix/388-ordinary-diagnostics	main	fix: diagnose only sampled activity variables
+392	MERGED		genomeOS:fix/390-bounded-activity-cdf	main	fix: bound spatial activity count scoring
+393	MERGED		genomeOS:fix/391-center-hsgp-fields	main	fix: center spatial HSGP fields
+395	MERGED		genomeOS:perf/394-activity-cupy-batching	main	perf: group exact CDF queries by tail length
+397	MERGED		genomeOS:results/384-spatial-activity-preflight	main	docs: record spatial activity preflight rejection
+398	CLOSED		canderson50:claude/genomeos-project-review-lugixz	main	fix(P1): refuse fractional counts instead of truncating them
+399	OPEN		canderson50:claude/genomeos-project-review-lugixz	main	fix(P2): select tied inducing candidates by maximin, not float noise
+400	MERGED		canderson50:claude/issue-199-circular-import	main	fix(P2): import surfaces.persistence without a cycle through fit
+401	OPEN		canderson50:claude/issue-296-website-gates	main	docs: list the website CI gates beside the Python ones
+402	OPEN		canderson50:claude/issue-258-contract-test-pythonpath	main	fix: run the frozen-contract check against the tree under test
+403	OPEN		manpreetbola:literature/hbb-rs334-piel-source-check	main	docs(audit): check the Piel 2010 source list for the HBB rs334 corpus study (advances #151)
+408	MERGED		genomeOS:feat/atlas-mobile-sheets	main	Atlas: mobile bottom sheets so the globe stays usable on phones
+410	MERGED		genomeOS:fix/atlas-globe-drag-timeout	main	ci: give the phone globe-drag test the 120 s globe budget
+412	MERGED		genomeOS:ci/shard-playwright-xdist	main	ci: shard Playwright 4 ways and run pytest under xdist
+414	MERGED		genomeOS:ci/pytest-durations	main	ci: cap BLAS threads per xdist worker and fix a pyarrow shutdown abort
+417	MERGED		genomeOS:fix/atlas-render-error-recovery	main	fix: recover the Atlas globe from render-loop errors (one failed worker fetch no longer kills it)
+421	MERGED		genomeOS:fix/repo-move-references	main	Update container, Pages fallback and site links after the move to the genomeOS org
+423	MERGED		genomeOS:feat/atlas-fast-load	main	Atlas: near-instant default load (GOSA binary tiers, data worker, chunked reveal)
+424	OPEN		canderson50:claude/brave-volta-e1q3wo	main	docs: bring the living docs in line with main and the board
+427	MERGED		genomeOS:docs/board-on-org	main	Point board links at the genomeOS org board and correct stale site status text
+428	MERGED		genomeOS:feat/site-svg-logo	main	Site branding: genomeOS Foundation logo, globe favicon, and the genomeOS Atlas button
+429	MERGED		genomeOS:feat/site-analytics	main	Add Google Analytics 4 with regional consent, a cookie control and Atlas usage events
+431	MERGED		canderson50:claude/ga-consent-qc-tr	feat/site-analytics	ask first in Quebec and Turkey, and send dataset_id only after explicit opt-in
+432	OPEN	draft	genomeOS:integrate/local-with-main-20261010	main	Integrate local trait evidence and map comparison with current main
+434	MERGED		genomeOS:fix/atlas-e2e-flakes	main	Fix two intermittent Atlas browser tests at their product causes (closes #430)
+435	MERGED		canderson50:claude/issue-276-bit-exact-h2d	main	fix: add a bit-exact host-to-device transfer helper (advances #276)
+436	OPEN	draft	genomeOS:feat/atlas-read-only-chat-433	integrate/local-with-main-20261010	feat: add a read-only published-map assistant preview
+437	MERGED		genomeOS:feat/atlas-gcs-web-data	main	Atlas: serve per-dataset web data from a public GCS bucket (Part C)
+440	CLOSED		canderson50:claude/atlas-picker-wordmark	main	fix: set genomeOS in the Atlas basemap picker in the wordmark type
+441	CLOSED		canderson50:claude/newsletter-signup	feat/site-analytics	feat: add a launch-updates newsletter sign-up with its privacy notice - #4
+447	MERGED		genomeOS:perf/atlas-cesium-widget	main	Atlas: build the globe on CesiumWidget instead of Viewer
+448	MERGED		genomeOS:perf/atlas-compact-borders	main	Atlas: ship the Natural Earth borders as a compact binary, 3.7x smaller
+449	MERGED		genomeOS:perf/atlas-provisional-values	main	Atlas: show approximate mean and SD until exact cell values load
+450	MERGED		genomeOS:perf/atlas-load-order	main	Atlas: after the map appears, load borders, then exact values, then the starfield
+456	MERGED		genomeOS:feat/atlas-globe-offset	main	Atlas: centre the globe in the open area beside the controls panel
+457	MERGED		genomeOS:fix/stadia-lightbox-flake	main	Atlas: lift the scene under the credit lightbox in the same frame under reduced motion
+458	MERGED		genomeOS:feat/atlas-reveal-wave	main	Atlas: reveal the surface as a wave growing outward from the view centre
+462	MERGED		genomeOS:feat/site-redesign	main	Site: visual-first redesign; merge Working groups into Contribute; rename Technical docs to Docs (#454)
+470	MERGED		genomeOS:ci/skip-python-tests-for-web-only-prs	main	ci: skip the Python test job for pull requests that touch only paths it never reads
+474	MERGED		genomeOS:data/store-on-gcs	main	Move committed data out of git onto a public GCS data store
+475	MERGED		genomeOS:feat/web-data-format-version	main	feat: give the Atlas web data format an explicit version (closes #467)
+476	MERGED		genomeOS:chore/codeowners	main	chore: require a code-owner review on main
+477	MERGED		genomeOS:ci/project-token-environment	main	ci: read the project-board token only from a main-only environment
+479	OPEN		genomeOS:docs/automated-refit-design	main	docs: design the automated refit, QC report and reviewer-approved publish pipeline
+481	MERGED		genomeOS:feat/budget-kill-switch	main	Add a budget kill switch for the public data bucket and an upload-only publisher
+482	MERGED		genomeOS:data/one-hour-cache	main	data: serve data-store objects with a one-hour cache (#473)
+485	OPEN		genomeOS:docs/atlas-terrain-draping-design	main	docs: design draping the Atlas data onto Cesium World Terrain (advances #483)
+486	OPEN		genomeOS:fix/terrain-visibility	main	fix(atlas): make Cesium World Terrain visible: hillshade, relief control, zoom floor (advances #483)
+487	OPEN		genomeOS:feat/atlas-drape-1	fix/terrain-visibility	feat(atlas): terrain draping phase 1: draping hillshade, draped picks, e2e peak (advances #483)
+488	OPEN		genomeOS:feat/atlas-drape-2	feat/atlas-drape-1	feat(atlas): terrain draping phase 2: the data surface drapes onto World Terrain (advances #483)
+489	MERGED		genomeOS:data/hbs-piel-parity-input	main	data: publish the HbS parity run's input, release 2026-10-18 (advances #45)
+490	OPEN		genomeOS:feat/atlas-drape-3	feat/atlas-drape-2	feat(atlas): terrain draping phase 3: borders, footprints, labels and symbols follow the ground (advances #483)
+491	OPEN		genomeOS:data/fit-inputs	main	data: every new artifact carries the exact observations it was fit on
+492	OPEN		genomeOS:feat/atlas-drape-4	feat/atlas-drape-3	feat(atlas): terrain draping phase 4: Honmoon contours, shader pre-warm and asserted terrain budgets (closes #483)
+493	OPEN		canderson50:claude/issue-111-build-surfaces-budget	main	fix(P2): default the batch surface builder to the budget that converged
+494	OPEN		canderson50:claude/issue-39-contraction-report	main	feat(P2): report posterior contraction by support state and survey size
+495	OPEN		canderson50:claude/issue-198-replay-guarantee	main	test: pin the SurfaceFit clean-process replay guarantee
+497	OPEN		canderson50:cursor/gates-invariant-reviewer	main	chore: add /gates command and invariant reviewer

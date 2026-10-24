@@ -1,0 +1,270 @@
+number	state	state_reason	board_status	labels	title
+3	OPEN		Backlog	type:data,skill:popgen,priority:medium	Datasets: scored assessment (comprehensiveness × accessibility × geographic precision)
+7	OPEN		Backlog	type:data,P0:registry,skill:popgen,priority:critical	P0 — Population geolocation registry
+8	OPEN		Backlog	type:data,P1:observations,skill:data-engineering,priority:critical	P1 — Georeferenced observations store
+9	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	P2 — Geostatistical surface inference
+10	OPEN		Backlog	type:science,P3:burden,skill:clinical-genetics,priority:high	P3 — Burden engine
+11	OPEN		Backlog	type:infra,P4:backend,skill:data-engineering,priority:medium	P4 — Tile and query backend
+12	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:medium	P5 — Map mode UI
+13	OPEN		Backlog	type:governance,launch,skill:governance,priority:high	Public launch track
+14	CLOSED	COMPLETED	Done	type:data,P0:registry,skill:popgen,priority:critical	Registry schema with strict coordinate contract
+15	CLOSED	COMPLETED	Done	type:data,P0:registry,skill:popgen,priority:critical	HGDP adapter — the reference source adapter
+16	CLOSED	COMPLETED	Done	type:data,P0:registry,skill:popgen,priority:critical	Registry build with alias-collision detection
+17	OPEN		Backlog	type:data,P0:registry,skill:popgen,priority:high	1KG adapter with sampling-vs-ancestral flags
+18	CLOSED	COMPLETED	Done	type:data,P0:registry,skill:popgen,priority:high	AFND adapter (1,324 populations)
+19	OPEN		Backlog	type:data,P0:registry,skill:popgen,priority:medium	SGDP and GenomeAsia (GAsP) adapters
+20	OPEN		Backlog	type:data,P0:registry,skill:popgen,priority:high	AADR adapter — per-individual coordinates and dates
+21	CLOSED	NOT_PLANNED	Not planned	type:data,P0:registry,skill:geospatial,priority:medium	Per-population uncertainty radii, replacing the 50 km default
+22	OPEN		Backlog	type:governance,P0:registry,launch,skill:governance,priority:medium	CARE-aligned biocultural notices for indigenous-panel entries
+23	OPEN		Backlog	type:docs,P0:registry,skill:popgen,priority:medium	Publish the registry as a standalone citable dataset
+24	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:data-engineering,priority:critical	Observations schema with mandatory ascertainment fields
+25	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:data-engineering,priority:critical	gnomAD HGDP+1KG adapter with registry join
+26	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:popgen,priority:critical	MAP HbS and G6PD survey adapter
+27	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:geospatial,priority:high	H3 indexing and the res 4–6 resolution ladder
+28	CLOSED	COMPLETED	Done	type:infra,P1:observations,skill:data-engineering,priority:high	Partitioned parquet store and frozen data contract
+29	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:medium	MCPS, IndiGen and GenomeIndia adapters
+30	OPEN		Backlog	type:data,P1:observations,skill:clinical-genetics,priority:high	Ingest disease-variant sets ascertained outside Western clinical genetics
+31	OPEN		Backlog	type:data,P1:observations,skill:clinical-genetics,priority:medium	Clinical testing intensity layer
+32	OPEN		In review	type:data,P1:observations,skill:clinical-genetics,priority:critical,wants-expert-review	Define and freeze the curated variant set
+33	OPEN		Backlog	type:infra,P1:observations,skill:data-engineering,priority:medium	GCS staging and data-version pinning
+34	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	DECISION: INLA-SPDE runtime (R-INLA is R-only)
+35	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	Binomial-GP fit with β_design and β_cohort offsets
+36	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Hierarchical hyperpriors by allele-frequency decile
+37	OPEN		In review	type:science,P2:surfaces,skill:spatial-stats,priority:high	Observation-as-disc weighting by radius_km
+38	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	Data-support mask: posterior_contraction and prior_dominated
+39	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high	Calibrate resolution-promotion and contraction thresholds on HbS
+40	CLOSED	COMPLETED	Done	type:infra,P2:surfaces,skill:data-engineering,priority:medium	Batch orchestration over the curated set, with published exclusion list
+41	CLOSED	COMPLETED	Done	type:science,P3:burden,skill:clinical-genetics,priority:high	Recessive, dominant and X-linked burden expressions
+42	OPEN		Backlog	type:science,P3:burden,skill:clinical-genetics,priority:high,wants-expert-review	Curate the penetrance table
+43	CLOSED	COMPLETED	Done	type:infra,P3:burden,skill:geospatial,priority:medium	WorldPop/GPWv4 denominators aggregated to H3
+44	CLOSED	COMPLETED	Done	type:science,P3:burden,skill:spatial-stats,priority:high	Posterior-draw uncertainty propagation (500 draws)
+45	OPEN	REOPENED	In progress	type:science,P3:burden,skill:spatial-stats,priority:critical	GOLDEN TEST 1 — HbS parity
+46	OPEN		Backlog	type:science,P3:burden,skill:clinical-genetics,priority:high	GOLDEN TEST 2 — G6PD parity (X-linked)
+47	OPEN		Backlog	type:science,P3:burden,skill:clinical-genetics,priority:high	GOLDEN TEST 3 — carrier-screening parity
+48	CLOSED	COMPLETED	Done	type:science,P3:burden,skill:clinical-genetics,priority:high	Verify every refusal condition by test
+49	OPEN		Backlog	type:infra,P4:backend,skill:data-engineering,priority:high	Cloud Run + DuckDB read service
+50	OPEN		Backlog	type:infra,P4:backend,skill:data-engineering,priority:high	Endpoints: /variants/search, /surface, /burden, /observations
+51	OPEN		Backlog	type:infra,P4:backend,skill:data-engineering,priority:high	/aggregate with unmapped-fraction reporting
+52	OPEN		Backlog	type:infra,P4:backend,skill:data-engineering,priority:medium	Resolution-laddered parquet shards and CDN
+53	OPEN		Backlog	type:infra,P4:backend,skill:data-engineering,priority:medium	BigQuery batch orchestration
+54	OPEN		Backlog	type:governance,P4:backend,launch,skill:governance,priority:high	Enforce the variant-class policy in the API, not in a prompt
+55	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	CesiumJS 3D globe + 2D map explorer scaffold
+56	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:medium	Observations layer
+57	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:medium	Surface layer with per-frame resolution selection
+58	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:medium	Uncertainty toggle, two-panel by default
+59	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	Data-support mask, on by default
+60	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:medium	Burden layer with metric selector
+61	OPEN		Backlog	type:ui,P5:map-ui,skill:geospatial,priority:medium	Admin aggregation choropleth (GADM)
+62	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:medium	Rectangle, circle and lasso region selection
+63	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:high	URL-encodable view state
+64	OPEN		Backlog	type:docs,P5:map-ui,skill:frontend,priority:medium	Legend carrying model version and assumption flags
+65	OPEN		Backlog	type:docs,launch,skill:governance,priority:medium	CONTRIBUTING, CODE_OF_CONDUCT, issue templates
+66	CLOSED	COMPLETED	Done	type:governance,launch,skill:governance,priority:high,needs-human-decision	Written position: redistributing surfaces from indigenous-population panels
+67	OPEN		Backlog	type:outreach,launch,skill:partnerships,priority:high	Outreach: PGG.SNV bulk access
+68	OPEN		Backlog	type:outreach,launch,skill:partnerships,priority:medium	Outreach: 23andMe fitted-surface proposal
+69	OPEN		Backlog	type:docs,launch,skill:governance,priority:low	Sponsorship wiring and FUNDING.yml
+83	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:low,wants-expert-review	Beta-binomial vs Binomial likelihood for the surface fit
+85	OPEN		Backlog	type:docs,P2:surfaces,skill:spatial-stats,priority:medium,wants-expert-review	Amend design §7 to match the implemented engine and kernel
+87	OPEN		Backlog	type:docs,P3:burden,skill:clinical-genetics,priority:medium,wants-expert-review	§9 defines affected_freq inconsistently across inheritance modes
+89	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:clinical-genetics,priority:low,wants-expert-review	MAP HbS: 369 surveys report HbAA and HbAS but no HbSS — refuse or assume zero?
+90	CLOSED	COMPLETED	Done	type:data,P3:burden,skill:data-engineering,priority:critical	Extract Piel et al. 2013 national AS/SS neonate estimates as the parity target
+92	OPEN		Backlog	type:science,P3:burden,skill:spatial-stats,priority:low,wants-expert-review	§8 scores against Piel's IQR (50% CI), not a 95% interval — and medians don't sum
+94	CLOSED	COMPLETED	Done	type:science,P3:burden,skill:geospatial,priority:critical	Aggregate the fitted surface to national estimates, for parity scoring
+96	OPEN		Backlog	type:data,P3:burden,skill:geospatial,priority:medium	§9 says no gridded birth raster exists — WorldPop publishes per-country ones
+99	CLOSED	COMPLETED	Done		Add rigorous scientific, modularity, smoke-test, and privacy guardrails
+101	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:geospatial,priority:high	The support mask has no notion of whether anyone lives in a cell
+102	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	§6 specifies post_mean, but the mean is the wrong summary for a bounded skewed posterior
+103	OPEN	REOPENED	In progress	type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	Inverse-logit link produces implausible extrapolation — Piel replaced it for this reason
+104	OPEN		Backlog	type:infra,P2:surfaces,skill:data-engineering,priority:high	GPU acceleration: JAX for the fits, cuSpatial for the geospatial joins
+106	CLOSED	COMPLETED	Done		Minimal artifact read service with diagnostic preview
+109	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:critical	Held-out predictive validation for the HbS surface — no numbers exist yet
+110	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:critical	Cross-validation coverage scores the latent frequency against noisy observations
+111	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high	4 of 10 cross-validation folds fail to converge at M=150 / 400 draws
+112	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	SurfaceFit exposes posterior summaries but not draws, so the burden path cannot run on a real fit
+113	OPEN		Backlog	type:science,P3:burden,skill:spatial-stats,priority:medium,needs-human-decision	DECISION: may a national total include masked cells if it carries their full posterior?
+116	OPEN		Backlog	type:science,P2:surfaces,skill:clinical-genetics,priority:high	§6 keys artifacts by variant, but G6PD deficiency is a phenotype of ~200 alleles
+117	CLOSED	COMPLETED	Done	type:data,type:outreach,P1:observations,skill:popgen,skill:partnerships,priority:medium	AFND: obtain the population corpus, then the P1 observations adapter
+121	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high	cohort_id must not default to the population when a source has no study accession
+122	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	lengthscale_sigma cannot be hand-tuned per variant at 767 alleles
+123	OPEN		Backlog	type:science,P1:observations,skill:spatial-stats,priority:high	A mega-cohort can outweigh thousands of populations (DKMS an=6.9M)
+127	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	Random CV folds shatter multi-site studies, breaking cohort identifiability and the predictive premise
+128	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:medium	Should variants share a spatial scale? (hierarchical pooling vs per-variant fits)
+129	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:medium	The spatial model is stationary — one correlation range for the whole planet
+130	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	Spatial skill is per-variant: gate surface publication on beating a constant baseline
+133	CLOSED	COMPLETED	Done	type:science,P1:observations,skill:data-engineering,priority:medium	KIR gene presence and cytokine genotypes are real data but not allele frequencies — what interface?
+134	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:data-engineering,priority:high	AFND adapter labels KIR, cytokine and MIC variants as `hla:`, and treats genotypes as allele counts
+137	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	HLA-C*03:03 fits a 4,189 km range the variogram does not support — the GP has no nugget
+141	CLOSED	COMPLETED	Done	type:data,P0:registry,skill:data-engineering,priority:critical	21 ancestry groups share one coordinate: NMDP donors carry 41% of the corpus, placed in Maryland
+144	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	Figures can be arithmetically faithful and visually false: colour scale and marker size used different windows
+149	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:data-engineering,priority:high	Publications as a P1 observation source: adapter proposal + LCT/MCM6 pilot corpus
+150	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:high	G6PD literature ingestion with X-linked denominator parity
+151	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:critical	HBB rs334 publication round trip into HbS parity
+153	CLOSED	COMPLETED	Done	type:docs,launch,skill:frontend,priority:medium	Build the public genomeOS documentation site on GitHub Pages
+154	CLOSED	COMPLETED	Done	bug,duplicate,type:data,P1:observations,skill:data-engineering,priority:high	Deduplicate or disambiguate repeated AFND frequency source rows
+157	CLOSED	COMPLETED	Done	type:docs,launch,skill:frontend,priority:medium	Keep navigation visible and unify the genomeOS wordmark
+159	CLOSED	COMPLETED	Done		LCT rs4988235 corpus slice: Enattah 2007 Table 3 genotype counts (12 staged records)
+162	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,skill:geospatial,priority:low	Predict posterior surfaces directly on a triangle mesh
+163	CLOSED	COMPLETED	Done	type:infra,P4:backend,launch,priority:high	Publish the API container to GitHub Container Registry
+164	CLOSED	COMPLETED	Done	bug,type:infra,P4:backend,launch,priority:high	Automated GHCR publish lacks package Actions access
+165	CLOSED	COMPLETED	Done	enhancement,type:ui,P5:map-ui,launch,skill:frontend,priority:medium	Enable Cell outlines by default and rename the layer control
+166	CLOSED	COMPLETED	Done	bug,type:infra,P5:map-ui,skill:frontend,priority:medium	Atlas review capture times out on full production geometry
+167	CLOSED	COMPLETED	Done	enhancement,type:ui,P5:map-ui,launch,skill:frontend,priority:medium	Show selected cell coordinates on the Google Maps chooser
+170	CLOSED	COMPLETED	Done	bug,type:ui,P5:map-ui,launch,skill:frontend,skill:geospatial,priority:high	Keep observation markers above the inferred surface and render domes as studs
+171	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high,wants-expert-review	Add layered gnomAD ancestry, genomic constraint, and ClinVar evidence
+172	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	Show honest progress for Atlas data and rendering transitions
+176	CLOSED	COMPLETED	Done	bug,type:ui,P5:map-ui,launch,skill:frontend,skill:geospatial,priority:high	Keep observation markers stable above surfaces and restore spheres
+177	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,launch,skill:frontend,priority:high	Clarify the Atlas hero description
+178	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,launch,skill:frontend,priority:high	Condense Atlas control and inspector typography
+180	OPEN		Backlog	type:data,P1:observations,skill:popgen,skill:clinical-genetics,skill:geospatial,priority:medium	Audit disease-associated alleles with HbS/G6PD-grade geospatial frequency evidence
+181	OPEN		Backlog	type:data,P1:observations,skill:popgen,skill:clinical-genetics,skill:geospatial,priority:low	HFE: assess C282Y subnational frequency evidence beyond British and Irish regions
+182	OPEN		Backlog	type:data,P1:observations,skill:popgen,skill:clinical-genetics,skill:geospatial,priority:high	HbC: qualify georeferenced allele-frequency surveys for Atlas ingestion
+183	OPEN		Backlog	type:data,P1:observations,skill:popgen,skill:clinical-genetics,skill:geospatial,priority:medium	α-thalassaemia: qualify regional allele-frequency observations and mutation classes
+184	OPEN		Backlog	type:data,P1:observations,skill:popgen,skill:clinical-genetics,skill:geospatial,priority:medium	Duffy-null: qualify FY*BES geospatial data as a malaria-susceptibility layer
+185	OPEN		Backlog	type:data,P1:observations,skill:popgen,skill:clinical-genetics,skill:geospatial,priority:low	APOL1: qualify G1/G2 spatial risk-allele data for an African CKD layer
+186	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:low	Widen the statistical-elevation height control
+187	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:popgen,skill:data-engineering,priority:high	HBB rs334 corpus slice (Salih 2010) - staged under the literature evidence contracts
+189	OPEN	REOPENED	In progress	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Global AF modeling: benchmark-first research program and release gates
+190	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:geospatial,priority:high,wants-expert-review	MAP HbS unknown/unbounded area becomes an unmarked fixed radius
+191	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Observation prediction needs explicit survey design and shared new-cohort effects
+192	CLOSED	COMPLETED	Done	type:science,P1:observations,skill:spatial-stats,priority:high,wants-expert-review	P1 schema silently truncates fractional counts and date bounds
+193	OPEN		Backlog	type:ui,P5:map-ui,skill:clinical-genetics,skill:frontend,priority:medium	Proposal: AlphaGenome AVI as external reference annotation in the variant info panel (predicted only)
+194	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	Fix count-scoring probability and exact quantile boundary failures
+195	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:popgen,priority:high,wants-expert-review	Validate local CuGen sample subsetting and bounded training-only LD pilot
+196	CLOSED	COMPLETED	Done	bug,type:docs,P2:surfaces,skill:popgen,priority:medium	Correct unsupported LD utility-timing attribution in CuGen methods note
+198	OPEN		Backlog	bug,type:science,P2:surfaces,skill:spatial-stats,priority:medium	Investigate small fresh-versus-cached GP prediction drift at the unchanged parent
+199	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:medium	Direct surface persistence import fails through an existing circular dependency
+200	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	Refuse overflow hidden by expit in unseen-cohort composition
+201	OPEN		Backlog	bug,type:infra,P2:surfaces,skill:popgen,priority:medium	Track CuGen LD reader closure before sustained pilot use
+202	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	Refuse malformed posterior values and preserve no-effect draw identity
+205	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:popgen,priority:high,wants-expert-review	Qualify CuGen GPU LD raw-moment precision before multivariant admission
+209	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	Near-one beta-binomial CDF can produce invalid randomized PIT and abort fold accounting
+211	OPEN		In progress	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Compare population-heterogeneity count predictions against pooled B0
+214	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	B0H NUTS can get trapped by beta-binomial log-gamma cancellation
+217	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	Fix nonportable floating-point bound assertion in dependence reference test
+219	OPEN		Backlog	type:data,P0:registry,skill:geospatial,priority:medium	Correct mismatched HGDP registry citation and verify coordinate provenance
+221	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Reject inconsistent scalar lengths and control statuses in SBC evidence
+222	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Reject noninteger canonical point slots in SBC evidence
+225	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:data-engineering,priority:high	afnd_carriers.py rounds the sample size and reads it in three inconsistent forms
+228	CLOSED	NOT_PLANNED	Not planned	type:science,P1:observations,skill:data-engineering,priority:low,needs-human-decision	Decide: should AFND identities hash an explicit canonical numeric format?
+230	OPEN		Backlog	bug,type:infra,P4:backend,skill:governance,priority:high	Reject internal SDD scratch paths in the tracked-file privacy gate
+231	CLOSED	COMPLETED	Done	type:docs,P1:observations,skill:data-engineering,priority:low	docs: afnd_frequencies docstring says frequencies print to 4 dp; 10,040 rows print to 7
+232	OPEN		Backlog	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	Reject failed-control rank mismatch before selected-slot lookup
+234	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:low	Artifact manifest rounds prior_frequency_sd and correlation_range_km it records
+235	CLOSED	COMPLETED	Done	type:infra,skill:data-engineering,priority:medium	check_private_files.py does not catch personal machine paths embedded as string literals
+237	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:data-engineering,priority:low	Backfill a committed builder for the lct-enattah-2007 corpus slice
+238	CLOSED	COMPLETED	Done	type:docs,P1:observations,skill:data-engineering,priority:high	Data-submission guidance exists but is not reaching contributors: add a contributor entry point
+241	OPEN		Backlog	bug,type:science,P3:burden,skill:geospatial,priority:high	Population raster ingress silently converts undeclared negative counts to valid zero coverage
+242	OPEN		Backlog	type:data,type:governance,P1:observations,skill:data-engineering,priority:medium	Search manifest records no screener identity, so agent screening cannot be told from human
+246	OPEN		Backlog		AlphaGenome AVI: acquisition path and refresh cadence
+248	OPEN		Backlog	type:infra,P1:observations,skill:data-engineering,priority:high	Mechanical CI checks for data PRs, so contributors get feedback without waiting on a maintainer
+251	OPEN		Backlog	type:infra,P2:surfaces,skill:data-engineering,priority:low	perf: make B0H publication reachability checks scale predictably
+253	OPEN		Backlog	type:infra,P2:surfaces,skill:data-engineering,priority:high	Qualify native local storage for the frozen B0H GPU calibration
+254	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Freeze outcome-independent autosomal reference windows and bounded index preflight
+255	CLOSED	COMPLETED	Done	type:data,P2:surfaces,skill:data-engineering,priority:high,wants-expert-review	Acquire frozen reference windows and preserve source/QC count semantics
+256	OPEN		Backlog	type:data,P1:observations,skill:data-engineering,priority:high	The variant registry is gated on but never consumed, so a verified mapping row still cannot be used
+257	OPEN		Backlog	type:data,P1:observations,skill:data-engineering,priority:medium	Variant registry: four spec'd refusal conditions are declared but not enforced
+258	OPEN		Backlog	type:infra,skill:data-engineering,priority:low	test_contract_frozen is sensitive to the editable install pointing at another checkout
+261	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:medium,wants-expert-review	WP7: reconcile CLUES2 simulator endpoint and frequency ascertainment
+262	CLOSED	COMPLETED	Done	bug,type:data,P0:registry,skill:data-engineering,priority:high	Registry build silently overwrites coordinates under the same version
+264	OPEN		Backlog	type:data,P0:registry,skill:geospatial,priority:medium,wants-expert-review	Resolve conflicting HGDP coordinates in Hollenbach 2012 Table 1 before reuse
+266	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Inducing GP prior varies by location, but support contraction uses one prior SD
+271	OPEN		Backlog	type:data,P1:observations,skill:data-engineering,priority:medium	Variant registry has no verified_by column, so verifier identity lives in free text
+272	OPEN		Backlog	type:data,P1:observations,skill:data-engineering,priority:low	Supersede the truncated lct-enattah-2007 search manifest (Q3 recorded 25 of 58)
+273	CLOSED	COMPLETED	Done	bug,type:infra,P2:surfaces,skill:data-engineering,priority:high	Fix calibration-report subprocess cache portability on Linux
+275	OPEN		Backlog	type:infra,P2:surfaces,skill:data-engineering,priority:high	Native qualification: preserve and verify the parent-death handshake across exec
+276	OPEN		Backlog	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	fix: preserve signed zero in CUDA qualification scalar transfers
+277	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	fix: preserve predictive construction contract through endpoint observers
+278	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	fix: preserve planned CPU E4 work when GPU attribution is unavailable
+280	OPEN		Backlog	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	H3 inducing placement is platform-sensitive when nearest-distance candidates tie
+281	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	perf: make full B0H reduction practical
+282	OPEN		Backlog	type:science,P4:backend,skill:popgen,priority:high,wants-expert-review	Implement traceable trait evidence and gated cross-trait map comparison
+285	CLOSED	COMPLETED	Done	type:infra,P2:surfaces,skill:data-engineering,priority:high	Scientific test environment fails on removed NumPy row_stack
+289	OPEN		Backlog	bug,type:science,P2:surfaces,skill:spatial-stats,priority:high	fix: make hardware-seam preflight and deletion watchdog independently diagnosable
+290	OPEN		In review	type:science,P2:surfaces,skill:spatial-stats,skill:geospatial,priority:medium,wants-expert-review	WP3: qualify Earth Engine satellite embeddings and environmental covariates
+293	CLOSED	COMPLETED	Done	type:data,type:governance,skill:governance,priority:high,licence:non-commercial	Mark non-commercial-licensed data so a commercial component could extract it
+294	CLOSED	COMPLETED	Done	type:data,type:governance,skill:governance,priority:low,wants-expert-review,licence:non-commercial	Record dated commercial-use checks for gnomAD and dbSNP
+296	OPEN		Backlog	type:infra,type:docs,priority:medium	AGENTS.md command list omits the three website CI gates
+298	CLOSED	COMPLETED	Done	type:science,type:infra,skill:geospatial,priority:medium	Figure test asserts only that a PNG exists, so panel and colour-ramp errors pass
+299	OPEN		Backlog	type:data,type:infra,skill:data-engineering,priority:medium	Reference-window count checks pass mutation testing: deleting them breaks no test
+300	CLOSED	COMPLETED	Done	bug,type:science,P3:burden,skill:spatial-stats,priority:critical	Align HbS parity denominators to the Piel 2010 reference year
+307	OPEN		In review	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	B1 local count smoother comparator for HbS background and peaks
+312	OPEN		Backlog	type:data,P4:backend,skill:data-engineering,priority:high	Pan-UKB manifest ingestion loses current source paths and guesses Tabix locations
+314	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	fix: admit bounded beta-binomial log scoring for high denominators
+316	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	fix: avoid full-support predictive quantile probes at high denominators
+318	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	perf: batch exact CuPy beta-binomial tails efficiently
+319	CLOSED	COMPLETED	Done	type:infra,P2:surfaces,skill:data-engineering,priority:high	infra: checkpoint long spatial benchmarks at fold boundaries
+324	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:high	Mirror the GME Variome before its last surviving copy disappears
+325	CLOSED	COMPLETED	Done	type:data,P1:observations,skill:popgen,skill:data-engineering,priority:high	Ingest WBBC regional allele counts — the rare source that ships denominators
+326	OPEN		In review	type:data,P1:observations,skill:popgen,priority:high,wants-expert-review	Audit sample overlap across the five Chinese cohorts before merging any two
+327	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:medium,licence:non-commercial	Ingest ABraOM — open-licensed Brazilian frequencies, with a 574-person overlap trap
+328	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:medium	Request and evaluate the Taiwan Biobank bulk frequency release
+329	OPEN		Backlog	type:data,P1:observations,skill:popgen,priority:low	Watch for the EGP1K deposit — 1,024 Egyptian genomes, accessions pending
+331	OPEN		In progress	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	B1G: pre-register compact-support positive spatial residuals
+333	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high	Spatial GP benchmark accepts non-converged folds and drops diagnostics
+337	CLOSED	COMPLETED	Done	type:infra,P2:surfaces,skill:data-engineering,priority:high	Parallelize B0H case execution without weakening exactly-once evidence
+338	CLOSED	COMPLETED	Done	type:data,P0:registry,skill:data-engineering,priority:medium	Curated registry still truncates fractional counts, the defect #323 fixed in P1
+340	CLOSED	COMPLETED	Done	type:data,P0:registry,P1:observations,skill:data-engineering,priority:medium,needs-human-decision	Required string fields accept the word for missing: 'NA', 'None', whitespace all validate
+341	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	fix: reconcile B0H posterior support with exact count-predictive domain
+352	CLOSED	COMPLETED	Done	type:infra,P2:surfaces,skill:data-engineering,priority:critical	fix: preserve RunPod image startup for benchmark SSH
+355	CLOSED	COMPLETED	Done	type:governance,skill:governance,priority:high	License genomeOS under Apache 2.0 and publish status badges
+357	CLOSED	COMPLETED	Done		Reduce first-party coverage overhead in CI
+359	CLOSED	COMPLETED	Done		Serve the coverage badge without a Pages deployment gap
+371	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Define the prespecified power rule for subgroup noninferiority
+374	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	Enforce the prespecified three inner folds in nested selection
+376	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	Implement the prespecified one-shot B1G convergence retry
+378	CLOSED	COMPLETED	Done	bug	Repair the coverage badge artifact link
+380	CLOSED	NOT_PLANNED	Not planned		Closed
+382	OPEN		Backlog	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Define matched multi-seed robustness for B1G
+384	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Preflight a spatial activity gate before another HbS fit
+388	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:high,wants-expert-review	Fix ordinary-arm diagnostics for fixed activity probability
+390	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	Replace unbounded spatial-activity count CDF path
+391	CLOSED	COMPLETED	Done	bug,type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	Reparameterize spatial activity candidate at the null boundary
+394	CLOSED	COMPLETED	Done	type:science,P2:surfaces,skill:spatial-stats,priority:critical,wants-expert-review	perf: increase exact activity CDF GPU batching
+396	OPEN		Backlog		Publishing AVI output: the Atlas citation, and the Output Terms notice the terms ask for
+404	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	Atlas: mobile bottom sheets so the globe stays usable on phones
+405	CLOSED	COMPLETED	Backlog	type:ui,P5:map-ui,skill:frontend,priority:high	Atlas: near-instant default load (binary GOSA tiers, worker-built geometry, lazy Cesium)
+406	CLOSED	COMPLETED	Done	type:infra,P5:map-ui,skill:data-engineering,priority:high	Atlas: serve per-artifact web data from a public GCS bucket behind a CDN
+407	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:low	Atlas: short-explorer residuals after the mobile sheets (peek credits, InfoTip placement, /docs/ at 320 px)
+409	CLOSED	COMPLETED	Done	type:infra,P5:map-ui,skill:frontend,priority:high	CI: phone globe-drag test exceeds its 30 s budget on runners and blocks the Pages deploy
+411	CLOSED	COMPLETED	Done	type:infra,P5:map-ui,skill:data-engineering,priority:high	CI: shard Playwright and parallelise pytest (~1 h per run today)
+413	CLOSED	COMPLETED	Done	type:infra,P5:map-ui,skill:data-engineering,priority:high	CI: pytest still takes ~40 min under xdist on runners
+415	OPEN		Backlog		Publish an evidence-shape audit for the G6PD survey layer
+416	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	Atlas: one failed Cesium worker fetch stops the globe for good ('Rendering has stopped')
+418	CLOSED	COMPLETED	Done	type:ui,launch,skill:frontend,priority:medium	Use the genomeOS Foundation logo in the site header and a globe favicon
+419	CLOSED	COMPLETED	Done	bug,type:ui,launch,skill:frontend,priority:medium	Home hero labels overlap the call-to-action buttons on phones
+420	CLOSED	COMPLETED	Backlog	type:infra,launch,skill:data-engineering,priority:high	Update container, Pages fallback and site links after the move to the genomeOS org
+422	CLOSED	COMPLETED	Done	type:ui,launch,skill:frontend,priority:medium	Add Google Analytics 4 with region-aware consent and Atlas usage events
+425	CLOSED	COMPLETED	Done	type:infra,launch,priority:high	Move the project board to the genomeOS org
+426	CLOSED	COMPLETED	Done	type:docs,P5:map-ui,skill:frontend,priority:medium	Correct stale status text on the website
+430	CLOSED	COMPLETED	Done	type:infra,P5:map-ui,skill:frontend,priority:high	Fix two intermittent Atlas browser-test failures on main
+433	OPEN		Backlog	type:ui,P4:backend,P5:map-ui,skill:frontend,priority:medium,wants-expert-review	Plan Gemini-powered Atlas chat with validated map actions and admitted overlays
+438	OPEN		Backlog	type:infra,P5:map-ui,skill:frontend,priority:medium	Atlas: trace the ~3 s slower first load in a fresh Chrome against the data bucket
+439	OPEN		Backlog	type:infra,P5:map-ui,skill:data-engineering,priority:low	Atlas web data: test-hardening follow-ups from the Part C reviews
+442	OPEN		Backlog		Simulation-based calibration of the surface model (`fit_surface`)
+443	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:medium	Atlas: load borders, then exact cell values, then the starfield, in that order after the map appears
+444	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:medium	Atlas: show provisional mean and SD from the render tier until the exact values load
+445	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:geospatial,priority:medium	Atlas: serve the Natural Earth borders in a compact quantized encoding
+446	CLOSED	COMPLETED	Done	type:ui,P5:map-ui,skill:frontend,priority:high	Atlas: build the globe on CesiumWidget so the Cesium widget layer leaves the bundle
+451	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:low	Atlas: write the observation rings in one upload when heights change
+452	CLOSED	COMPLETED	Done		Atlas: centre the globe in the open area beside the controls panel
+453	CLOSED	COMPLETED	Done		Atlas: reveal the surface as a wave growing outward from the view centre
+454	CLOSED	COMPLETED	Done	type:ui,launch,skill:frontend,priority:medium	Website: visual-first redesign, merge Working groups into Contribute, rename Technical docs to Docs
+455	CLOSED	COMPLETED	Done		Flaky e2e: Stadia credit lightbox close button is covered on narrow phones
+459	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:low	Atlas: a dataset switch stalls the main thread for about 0.6 s after the commit
+460	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:low	Atlas: count the open inspector as an obstruction when centring the desktop globe
+461	OPEN		Backlog	type:ui,P5:map-ui,skill:frontend,priority:low	Atlas: shift the 2D map beside the controls panel, as the globe is
+463	OPEN		Backlog		Proposal for Epigenomic data mapping
+464	OPEN		Backlog	type:ui,skill:frontend,priority:low	Website: follow-ups from the site redesign (#462)
+465	OPEN		Backlog	type:data,P0:registry,skill:data-engineering,priority:medium	build_registry.py has no CLI route to add reviewed literature populations and aliases
+466	OPEN		Backlog	type:docs,priority:low	Update the old pip install recipe and the AFND #66 comments left stale after #424
+467	CLOSED	COMPLETED	Done	type:infra,P5:map-ui,skill:data-engineering,skill:frontend,priority:medium	Atlas web data: give the Python→web data format an explicit, checked version
+468	CLOSED	COMPLETED	Done	type:data,type:infra,P2:surfaces,skill:data-engineering,priority:medium	Move committed data out of git onto a public GCS data store
+469	CLOSED	COMPLETED	Done	type:infra,skill:data-engineering,priority:medium	CI: skip the Python test job for pull requests that touch only paths it never reads
+471	OPEN		Backlog	type:data,P2:surfaces,skill:data-engineering,priority:medium	Export fitted surfaces to a safe, non-pickle format so trained models can be published
+472	OPEN		Backlog	type:data,P1:observations,skill:data-engineering,priority:medium	Data store phase 2: publish the raw third-party harvests with their recorded terms
+473	OPEN		Backlog	type:infra,P2:surfaces,skill:data-engineering,priority:medium,needs-human-decision	Data store: base-URL discoverability and egress budget alert (owner decisions)
+478	OPEN		Backlog	type:ui,launch,skill:frontend,priority:medium	Marketing-site e2e tests fail intermittently on timing (different test each run)
+480	CLOSED	COMPLETED	Done	type:infra,P2:surfaces,skill:data-engineering,priority:high	Cost controls: a budget kill switch for the public data bucket, and an upload-only publisher identity
+483	OPEN		Backlog	bug,type:ui,P5:map-ui,skill:frontend,priority:high	Cesium World Terrain loads but has no visible effect, and hides the map data in highlands
+484	OPEN		Backlog	bug,type:ui,P5:map-ui,skill:frontend,priority:medium	Country labels from the far side of the globe draw through it in tilted views
+496	OPEN		Backlog		Add a /gates command and a read-only invariant reviewer
