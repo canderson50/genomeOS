@@ -47,3 +47,4 @@
 2026-11-06 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-06T03:29Z, 0 Ready of 270 issues). No claude/issue-* drafts open.
 2026-11-09 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-09T02:43Z, 0 Ready of 270 issues). No claude/issue-* drafts open.
 2026-11-10 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-10T00:43Z, 0 Ready of 270 issues). No claude/issue-* drafts open.
+2026-11-11 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-10T13:35Z, 0 Ready of 270 issues). No claude/issue-* drafts open. Container was replaced; recreated the agent-notes and agent-state worktrees.
