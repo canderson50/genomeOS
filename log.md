@@ -48,3 +48,4 @@
 2026-11-09 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-09T02:43Z, 0 Ready of 270 issues). No claude/issue-* drafts open.
 2026-11-10 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-10T00:43Z, 0 Ready of 270 issues). No claude/issue-* drafts open.
 2026-11-11 skipped: no candidates; agent-state/ready.json is empty (mirror 2026-11-10T13:35Z, 0 Ready of 270 issues). No claude/issue-* drafts open. Container was replaced; recreated the agent-notes and agent-state worktrees.
+2026-11-12 skipped: board mirror is stale (meta.json generated_at 2026-11-10T13:35Z, ~47h old), so steps 2 and 6 only, no issue picked. No claude/issue-* drafts open.
