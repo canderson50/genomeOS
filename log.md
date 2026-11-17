@@ -51,3 +51,4 @@
 2026-11-12 skipped: board mirror is stale (meta.json generated_at 2026-11-10T13:35Z, ~47h old), so steps 2 and 6 only, no issue picked. No claude/issue-* drafts open.
 2026-11-13 skipped: board mirror still stale (meta.json generated_at 2026-11-10T13:35Z, ~73h old), so steps 2 and 6 only, no issue picked. No claude/issue-* drafts open.
 2026-11-16 synced: fork main 205ae10 -> 912fb11 (merged upstream/main 8d84467, first upstream movement since 2026-10-19). Board mirror still stale (meta.json generated_at 2026-11-10T13:35Z, ~6 days old, and its upstream_main_sha e1706b4 now trails upstream), so steps 2 and 6 only, no issue picked. No claude/issue-* drafts open.
+2026-11-17 skipped: fork main already current at 912fb11 (upstream/main 8d84467 unchanged). Board mirror still stale (meta.json generated_at 2026-11-10T13:35Z, ~7 days old), so steps 2 and 6 only, no issue picked. No claude/issue-* drafts open.
